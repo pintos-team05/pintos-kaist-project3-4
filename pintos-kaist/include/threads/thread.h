@@ -115,10 +115,10 @@ struct thread {
 	uint64_t *pml4;                     /* Page map level 4 */
 	
 #endif
-#ifdef VM
+// #ifdef VM
 	/* Table for whole virtual memory owned by thread. */
 	struct supplemental_page_table spt;
-#endif
+// #endif
 	struct semaphore fork_sema;
 	struct semaphore exit_sema;
 	struct semaphore free_sema;
