@@ -4,6 +4,25 @@
 #include "vm/vm.h"
 #include "vm/inspect.h"
 
+/* Adds a mapping from user virtual address UPAGE to kernel
+ * virtual address KPAGE to the page table.
+ * If WRITABLE is true, the user process may modify the page;
+ * otherwise, it is read-only.
+ * UPAGE must not already be mapped.
+ * KPAGE should probably be a page obtained from the user pool
+ * with palloc_get_page().
+ * Returns true on success, false if UPAGE is already mapped or
+ * if memory allocation fails. */
+static bool
+install_page (void *upage, void *kpage, bool writable) {
+	struct thread *t = thread_current ();
+
+	/* Verify that there's not already a page at that virtual
+	 * address, then map our page there. */
+	return (pml4_get_page (t->pml4, upage) == NULL
+			&& pml4_set_page (t->pml4, upage, kpage, writable));
+}
+
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
 void
@@ -64,8 +83,15 @@ err:
 struct page *
 spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 	struct page *page = NULL;
-	/* TODO: Fill this function. */
 
+	struct page p;
+	struct hash_elem *e;
+
+	/* TODO: Fill this function. */
+	p.addr = va;
+	e = hash_find(&spt->pages, &p.hash_elem);
+	e != NULL ? hash_entry (e, struct page, hash_elem) : NULL;
+	
 	return page;
 }
 
@@ -75,6 +101,11 @@ spt_insert_page (struct supplemental_page_table *spt UNUSED,
 		struct page *page UNUSED) {
 	int succ = false;
 	/* TODO: Fill this function. */
+	// 1. spt에서 page->addr이 존재하는지 검사
+	// 2. pages hash에 page 삽입
+	if (hash_insert(&spt->pages, &page->hash_elem) == NULL){
+		succ = true;
+	}
 
 	return succ;
 }
@@ -112,7 +143,15 @@ static struct frame *
 vm_get_frame (void) {
 	struct frame *frame = NULL;
 	/* TODO: Fill this function. */
+	frame = palloc_get_page(PAL_ZERO | PAL_USER);
 
+	if (frame != NULL){
+		frame->kva = frame;     // ???
+		frame->page = NULL;
+	}
+	else{
+		PANIC("todo");
+	}
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
 	return frame;
@@ -134,6 +173,7 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
 	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
 	struct page *page = NULL;
+	
 	/* TODO: Validate the fault */
 	/* TODO: Your code goes here */
 
@@ -152,9 +192,15 @@ vm_dealloc_page (struct page *page) {
 bool
 vm_claim_page (void *va UNUSED) {
 	struct page *page = NULL;
-	/* TODO: Fill this function */
 
-	return vm_do_claim_page (page);
+	struct thread *t = thread_current();
+
+	/* TODO: Fill this function */
+	page = spt_find_page(&t->spt, va);
+	if(page != NULL)	
+		return vm_do_claim_page (page);
+	else
+		return false;
 }
 
 /* Claim the PAGE and set up the mmu. */
@@ -167,13 +213,43 @@ vm_do_claim_page (struct page *page) {
 	page->frame = frame;
 
 	/* TODO: Insert page table entry to map page's VA to frame's PA. */
+	bool success = install_page(page->addr, frame->kva, 1);
+	// pml4_set_page(&thread_current()->pml4, page, frame, 1);
 
+	if (!success) {
+	/* If page table entry insertion fails, free the frame and remove links */
+		frame->page = NULL;
+		page->frame = NULL;
+		// vm_free_frame(frame);
+		return false;
+	}
+	
 	return swap_in (page, frame->kva);
 }
+
+
+/* Returns a hash value for page p. */
+unsigned
+page_hash (const struct hash_elem *p_, void *aux UNUSED) {
+	const struct page *p = hash_entry (p_, struct page, hash_elem);
+	return hash_bytes (&p->addr, sizeof p->addr);
+}
+
+/* Returns true if page a precedes page b. */
+bool
+page_less (const struct hash_elem *a_, const struct hash_elem *b_, void *aux UNUSED) {
+	const struct page *a = hash_entry (a_, struct page, hash_elem);
+	const struct page *b = hash_entry (b_, struct page, hash_elem);
+
+	return a->addr < b->addr;
+}
+
 
 /* Initialize new supplemental page table */
 void
 supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
+	struct hash pages;
+	hash_init(&pages, page_hash, page_less, NULL);
 }
 
 /* Copy supplemental page table from src to dst */
