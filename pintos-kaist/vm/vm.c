@@ -5,6 +5,8 @@
 #include "vm/inspect.h"
 // project 3 add header
 #include "../include/lib/kernel/hash.h"
+#include "../include/userprog/process.h"
+#include "../include/threads/mmu.h"
 // project 3 add header
 
 //project 3 add function_prototype
@@ -131,7 +133,12 @@ static struct frame *
 vm_get_frame (void) {
 	struct frame *frame = NULL;
 	/* TODO: Fill this function. */
-
+	frame = palloc_get_page(PAL_USER);
+	frame->kva = frame;
+	if (frame == NULL) {
+		PANIC("todo");
+	}
+	
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
 	return frame;
@@ -171,11 +178,23 @@ vm_dealloc_page (struct page *page) {
 bool
 vm_claim_page (void *va UNUSED) {
 	struct page *page = NULL;
+	struct thread *th = thread_current();
 	/* TODO: Fill this function */
-
+	page = spt_find_page(&th->spt, va);
+	if (page == NULL) {
+		return false;
+	}
 	return vm_do_claim_page (page);
 }
+static bool
+install_page (void *upage, void *kpage, bool writable) {
+	struct thread *t = thread_current ();
 
+	/* Verify that there's not already a page at that virtual
+	 * address, then map our page there. */
+	return (pml4_get_page (t->pml4, upage) == NULL
+			&& pml4_set_page (t->pml4, upage, kpage, writable));
+}
 /* Claim the PAGE and set up the mmu. */
 static bool
 vm_do_claim_page (struct page *page) {
@@ -186,7 +205,7 @@ vm_do_claim_page (struct page *page) {
 	page->frame = frame;
 
 	/* TODO: Insert page table entry to map page's VA to frame's PA. */
-
+	int success = install_page(page, frame, is_writable(thread_current()->pml4));
 	return swap_in (page, frame->kva);
 }
 
