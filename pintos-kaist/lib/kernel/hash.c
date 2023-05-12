@@ -30,10 +30,11 @@ hash_init (struct hash *h,
 	h->hash = hash;
 	h->less = less;
 	h->aux = aux;
-
+	// 초기화 성공 true
 	if (h->buckets != NULL) {
 		hash_clear (h, NULL);
 		return true;
+	// 초기화 실패 false
 	} else
 		return false;
 }
@@ -224,6 +225,7 @@ hash_cur (struct hash_iterator *i) {
 }
 
 /* Returns the number of elements in H. */
+// 현재 해시에 저장된 원소의 수 반환
 size_t
 hash_size (struct hash *h) {
 	return h->elem_cnt;
@@ -391,4 +393,3 @@ remove_elem (struct hash *h, struct hash_elem *e) {
 	h->elem_cnt--;
 	list_remove (&e->list_elem);
 }
-

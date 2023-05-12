@@ -11,5 +11,5 @@ void process_exit (void);
 void process_activate (struct thread *next);
 
 void push_args(char **argv, int argc, struct intr_frame *if_);
-
+static bool install_page (void *upage, void *kpage, bool writable);
 #endif /* userprog/process.h */

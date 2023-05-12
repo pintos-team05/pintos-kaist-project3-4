@@ -35,20 +35,21 @@ struct hash_elem {
  * name of the outer structure STRUCT and the member name MEMBER
  * of the hash element.  See the big comment at the top of the
  * file for an example. */
+// hash_elem이 가리키는 struct thread의 주소 반환
 #define hash_entry(HASH_ELEM, STRUCT, MEMBER)                   \
 	((STRUCT *) ((uint8_t *) &(HASH_ELEM)->list_elem        \
 		- offsetof (STRUCT, MEMBER.list_elem)))
 
 /* Computes and returns the hash value for hash element E, given
  * auxiliary data AUX. */
+//Project3-1
 typedef uint64_t hash_hash_func (const struct hash_elem *e, void *aux);
 
 /* Compares the value of two hash elements A and B, given
  * auxiliary data AUX.  Returns true if A is less than B, or
  * false if A is greater than or equal to B. */
-typedef bool hash_less_func (const struct hash_elem *a,
-		const struct hash_elem *b,
-		void *aux);
+//Project3-1
+typedef bool hash_less_func (const struct hash_elem *a, const struct hash_elem *b, void *aux);
 
 /* Performs some operation on hash element E, given auxiliary
  * data AUX. */
@@ -75,6 +76,7 @@ struct hash_iterator {
 bool hash_init (struct hash *, hash_hash_func *, hash_less_func *, void *aux);
 void hash_clear (struct hash *, hash_action_func *);
 void hash_destroy (struct hash *, hash_action_func *);
+  
 
 /* Search, insertion, deletion. */
 struct hash_elem *hash_insert (struct hash *, struct hash_elem *);
