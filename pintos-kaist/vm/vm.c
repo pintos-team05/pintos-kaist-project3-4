@@ -68,13 +68,34 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 	struct supplemental_page_table *spt = &thread_current ()->spt;
 
 	/* Check wheter the upage is already occupied or not. */
-	if (spt_find_page (spt, upage) == NULL) {
-		/* TODO: Create the page, fetch the initialier according to the VM type,
+	if (spt_find_page (spt, upage) == NULL) { 
+		/* TODO: Create the page, fetch the initializer according to the VM type,
 		 * TODO: and then create "uninit" page struct by calling uninit_new. You
 		 * TODO: should modify the field after calling the uninit_new. */
 
 		/* TODO: Insert the page into the spt. */
+
+		struct page *page = palloc_get_page(PAL_USER);
+		if (page != NULL){
+			switch (VM_TYPE(type)) {
+				case VM_ANON:
+					page->frame = NULL;
+					uninit_new(page, upage, init, type, aux, &anon_initializer);
+					break;
+				case VM_FILE:
+					page->frame = NULL;
+					uninit_new(page, upage, init, type, aux, &file_backed_initializer);
+					break;
+				default:
+				    palloc_free_page(page);
+					return false;
+			}
+			page->va = upage;
+			return spt_insert_page(spt, page);
+		}
 	}
+	return false;  // true ? or false ?
+	
 err:
 	return false;
 }
@@ -88,7 +109,7 @@ spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 	struct hash_elem *e;
 
 	/* TODO: Fill this function. */
-	p.addr = va;
+	p.va = va;
 	e = hash_find(&spt->pages, &p.hash_elem);
 	e != NULL ? hash_entry (e, struct page, hash_elem) : NULL;
 	
@@ -143,7 +164,7 @@ static struct frame *
 vm_get_frame (void) {
 	struct frame *frame = NULL;
 	/* TODO: Fill this function. */
-	frame = palloc_get_page(PAL_ZERO | PAL_USER);
+	frame = palloc_get_page(PAL_USER);
 
 	if (frame != NULL){
 		frame->kva = frame;     // ???
@@ -175,6 +196,19 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	struct page *page = NULL;
 	
 	/* TODO: Validate the fault */
+	page = spt_find_page(spt, addr);
+	if (is_kernel_vaddr(addr) || (page == NULL)){
+		return false;
+	}
+
+	if (page->frame == NULL){
+		page->uninit.init(page, page->uninit.aux);
+		
+		
+
+		// load segment;
+	}
+
 	/* TODO: Your code goes here */
 
 	return vm_do_claim_page (page);
@@ -213,7 +247,7 @@ vm_do_claim_page (struct page *page) {
 	page->frame = frame;
 
 	/* TODO: Insert page table entry to map page's VA to frame's PA. */
-	bool success = install_page(page->addr, frame->kva, 1);
+	bool success = install_page(page->va, frame->kva, 1);
 	// pml4_set_page(&thread_current()->pml4, page, frame, 1);
 
 	if (!success) {
@@ -232,7 +266,7 @@ vm_do_claim_page (struct page *page) {
 unsigned
 page_hash (const struct hash_elem *p_, void *aux UNUSED) {
 	const struct page *p = hash_entry (p_, struct page, hash_elem);
-	return hash_bytes (&p->addr, sizeof p->addr);
+	return hash_bytes (&p->va, sizeof p->va);
 }
 
 /* Returns true if page a precedes page b. */
@@ -241,7 +275,7 @@ page_less (const struct hash_elem *a_, const struct hash_elem *b_, void *aux UNU
 	const struct page *a = hash_entry (a_, struct page, hash_elem);
 	const struct page *b = hash_entry (b_, struct page, hash_elem);
 
-	return a->addr < b->addr;
+	return a->va < b->va;
 }
 
 
