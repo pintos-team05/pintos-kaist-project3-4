@@ -225,10 +225,9 @@ void remove_file(int fd) {
 
 void validate_address(void *addr) {
 	struct thread *t = thread_current();
-	
-	if (is_kernel_vaddr(addr) || (pml4_get_page (t->pml4, addr) == NULL)){
+	if (is_kernel_vaddr(addr))
 		exit(-1);
-	}
+		
 }
 
 
@@ -283,6 +282,7 @@ struct file *get_file(int fd) {
 
 bool create(const char *file, unsigned initial_size) {
 	bool success;
+	validate_address(file);
 	if(file == NULL){
 		exit(-1);
 	}
@@ -335,6 +335,8 @@ int open(const char *file) {
 
 /* close file corresponds to file descriptor fd */
 void close(int fd) {
+	if (fd > FDCOUNT_LIMIT || fd < 0)
+		return -1;
 	/* Acquire global lock */
 	lock_acquire(&filesys_lock);
 	struct file *file_ptr = thread_current()->fdt[fd];

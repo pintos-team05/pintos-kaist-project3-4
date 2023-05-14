@@ -23,6 +23,7 @@ install_page (void *upage, void *kpage, bool writable) {
 			&& pml4_set_page (t->pml4, upage, kpage, writable));
 }
 
+
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
 void
@@ -192,6 +193,13 @@ static bool
 vm_handle_wp (struct page *page UNUSED) {
 }
 
+void validate_address2(void *addr) {
+	struct thread *t = thread_current();
+	if (is_kernel_vaddr(addr) || (pml4_get_page(t->pml4, addr)) == NULL)
+		exit(-1);
+}
+
+
 /* Return true on success */
 bool
 vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
@@ -209,13 +217,19 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	if (page == NULL){
 		return false;
 	}
-
+	
 	if (page->frame == NULL){
 		/* The page has not been initialized yet */
 		// obtain the base address of the page containing the faulted virtual address
 		if (!vm_do_claim_page(page))
 			return false;
 	}
+	if (pml4_get_page(thread_current()->pml4, pg_round_down(addr)) == NULL)
+		return false;
+
+	// validate_address2(addr);
+	
+
 
 	// page->uninit.init(page, page->uninit.aux);
 	// load segment;
@@ -224,6 +238,7 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 
 	return true;
 }
+
 
 /* Free the page.
  * DO NOT MODIFY THIS FUNCTION. */
