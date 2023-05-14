@@ -21,17 +21,17 @@
 #include "threads/palloc.h"
 #include "threads/pte.h"
 #include "threads/thread.h"
-#ifdef USERPROG
+// #ifdef USERPROG
 #include "userprog/process.h"
 #include "userprog/exception.h"
 #include "userprog/gdt.h"
 #include "userprog/syscall.h"
 #include "userprog/tss.h"
-#endif
+// #endif
 #include "tests/threads/tests.h"
-#ifdef VM
+// #ifdef VM
 #include "vm/vm.h"
-#endif
+// #endif
 #ifdef FILESYS
 #include "devices/disk.h"
 #include "filesys/filesys.h"
@@ -88,20 +88,20 @@ main (void) {
 	malloc_init ();
 	paging_init (mem_end);
 
-#ifdef USERPROG
+// #ifdef USERPROG
 	tss_init ();
 	gdt_init ();
-#endif
+// #endif
 
 	/* Initialize interrupt handlers. */
 	intr_init ();
 	timer_init ();
 	kbd_init ();
 	input_init ();
-#ifdef USERPROG
+// #ifdef USERPROG
 	exception_init ();
 	syscall_init ();
-#endif
+// #endif
 	/* Start thread scheduler and enable interrupts. */
 	thread_start ();
 	serial_init_queue ();

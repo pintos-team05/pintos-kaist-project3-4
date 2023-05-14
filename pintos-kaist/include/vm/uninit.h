@@ -4,13 +4,17 @@
 
 struct page;
 enum vm_type;
+// project 3 add function prototype
+static bool uninit_initialize (struct page *page, void *kva);
+static void uninit_destroy (struct page *page);
+// project 3 add function prototype
 
 typedef bool vm_initializer (struct page *, void *aux);
 
 /* Uninitlialized page. The type for implementing the
  * "Lazy loading". */
 struct uninit_page {
-	/* Initiate the contets of the page */
+	/* Initiate the contents of the page */
 	vm_initializer *init;
 	enum vm_type type;
 	void *aux;

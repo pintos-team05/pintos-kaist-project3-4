@@ -18,9 +18,9 @@
 #include "threads/mmu.h"
 #include "threads/vaddr.h"
 #include "intrinsic.h"
-#ifdef VM
+// #ifdef VM
 #include "vm/vm.h"
-#endif
+// #endif
 
 #define MAX_ARGS 14
 
@@ -32,6 +32,23 @@ static void __do_fork (void *);
 void push_args(char **argv, int argc, struct intr_frame *if_);
 struct thread* get_child_process(child_tid);
 void clear_children();
+// project 3 add function non header
+static struct frame *
+vm_get_frame (void) {
+	struct frame *frame = palloc_get_page(PAL_USER);
+	/* TODO: Fill this function. */
+	frame->kva = palloc_get_page(PAL_USER);
+	frame->page = NULL;
+	if (frame == NULL) {
+		PANIC("todo");
+	}
+	
+	ASSERT (frame != NULL);
+	ASSERT (frame->page == NULL);
+	return frame;
+}
+// project 3 add function non header
+
 /* General process initializer for initd and other process. */
 static void
 process_init (void) {
@@ -177,8 +194,8 @@ __do_fork (void *aux) {
 	if (!supplemental_page_table_copy (&current->spt, &parent->spt))
 		goto error;
 #else
-	if (!pml4_for_each (parent->pml4, duplicate_pte, parent))
-		goto error;
+	// if (!pml4_for_each (parent->pml4, duplicate_pte, parent))
+	// 	goto error;
 #endif
 	/* TODO: Your code goes here.
 	 * TODO: Hint) To duplicate the file object, use `file_duplicate`
@@ -660,13 +677,13 @@ validate_segment (const struct Phdr *phdr, struct file *file) {
 	return true;
 }
 
-#ifndef VM
+// #ifndef VM
 /* Codes of this block will be ONLY USED DURING project 2.
  * If you want to implement the function for whole project 2, implement it
  * outside of #ifndef macro. */
 
 /* load() helpers. */
-static bool install_page (void *upage, void *kpage, bool writable);
+// static bool install_page (void *upage, void *kpage, bool writable);
 
 /* Loads a segment starting at offset OFS in FILE at address
  * UPAGE.  In total, READ_BYTES + ZERO_BYTES bytes of virtual
@@ -682,64 +699,64 @@ static bool install_page (void *upage, void *kpage, bool writable);
  *
  * Return true if successful, false if a memory allocation error
  * or disk read error occurs. */
-static bool
-load_segment (struct file *file, off_t ofs, uint8_t *upage,
-		uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
-	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
-	ASSERT (pg_ofs (upage) == 0);
-	ASSERT (ofs % PGSIZE == 0);
+// static bool
+// load_segment (struct file *file, off_t ofs, uint8_t *upage,
+// 		uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
+// 	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
+// 	ASSERT (pg_ofs (upage) == 0);
+// 	ASSERT (ofs % PGSIZE == 0);
 
-	file_seek (file, ofs);
-	while (read_bytes > 0 || zero_bytes > 0) {
-		/* Do calculate how to fill this page.
-		 * We will read PAGE_READ_BYTES bytes from FILE
-		 * and zero the final PAGE_ZERO_BYTES bytes. */
-		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
-		size_t page_zero_bytes = PGSIZE - page_read_bytes;
+// 	file_seek (file, ofs);
+// 	while (read_bytes > 0 || zero_bytes > 0) {
+// 		/* Do calculate how to fill this page.
+// 		 * We will read PAGE_READ_BYTES bytes from FILE
+// 		 * and zero the final PAGE_ZERO_BYTES bytes. */
+// 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+// 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-		/* Get a page of memory. */
-		uint8_t *kpage = palloc_get_page (PAL_USER);
-		if (kpage == NULL)
-			return false;
+// 		/* Get a page of memory. */
+// 		uint8_t *kpage = palloc_get_page (PAL_USER);
+// 		if (kpage == NULL)
+// 			return false;
 
-		/* Load this page. */
-		if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes) {
-			palloc_free_page (kpage);
-			return false;
-		}
-		memset (kpage + page_read_bytes, 0, page_zero_bytes);
+// 		/* Load this page. */
+// 		if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes) {
+// 			palloc_free_page (kpage);
+// 			return false;
+// 		}
+// 		memset (kpage + page_read_bytes, 0, page_zero_bytes);
 
-		/* Add the page to the process's address space. */
-		if (!install_page (upage, kpage, writable)) {
-			printf("fail\n");
-			palloc_free_page (kpage);
-			return false;
-		}
+// 		/* Add the page to the process's address space. */
+// 		if (!install_page (upage, kpage, writable)) {
+// 			printf("fail\n");
+// 			palloc_free_page (kpage);
+// 			return false;
+// 		}
 
-		/* Advance. */
-		read_bytes -= page_read_bytes;
-		zero_bytes -= page_zero_bytes;
-		upage += PGSIZE;
-	}
-	return true;
-}
+// 		/* Advance. */
+// 		read_bytes -= page_read_bytes;
+// 		zero_bytes -= page_zero_bytes;
+// 		upage += PGSIZE;
+// 	}
+// 	return true;
+// }
 
 /* Create a minimal stack by mapping a zeroed page at the USER_STACK */
-static bool
-setup_stack (struct intr_frame *if_) {
-	uint8_t *kpage;
-	bool success = false;
+// static bool
+// setup_stack (struct intr_frame *if_) {
+// 	uint8_t *kpage;
+// 	bool success = false;
 
-	kpage = palloc_get_page (PAL_USER | PAL_ZERO);
-	if (kpage != NULL) {
-		success = install_page (((uint8_t *) USER_STACK) - PGSIZE, kpage, true);
-		if (success)
-			if_->rsp = USER_STACK;
-		else
-			palloc_free_page (kpage);
-	}
-	return success;
-}
+// 	kpage = palloc_get_page (PAL_USER | PAL_ZERO);
+// 	if (kpage != NULL) {
+// 		success = install_page (((uint8_t *) USER_STACK) - PGSIZE, kpage, true);
+// 		if (success)
+// 			if_->rsp = USER_STACK;
+// 		else
+// 			palloc_free_page (kpage);
+// 	}
+// 	return success;
+// }
 
 /* Adds a mapping from user virtual address UPAGE to kernel
  * virtual address KPAGE to the page table.
@@ -759,16 +776,54 @@ install_page (void *upage, void *kpage, bool writable) {
 	return (pml4_get_page (t->pml4, upage) == NULL
 			&& pml4_set_page (t->pml4, upage, kpage, writable));
 }
-#else
+// #else
 /* From here, codes will be used after project 3.
  * If you want to implement the function for only project 2, implement it on the
  * upper block. */
 
 static bool
 lazy_load_segment (struct page *page, void *aux) {
+	// vm_claim_page(page);
+	struct off_f *file_aux = aux;
+	struct file *file = file_aux->file;
+    off_t ofs = file_aux->ofs;
+    uint8_t *upage = file_aux-> upage;
+    uint32_t page_read_bytes = file_aux->read_bytes;
+    uint32_t page_zero_bytes = file_aux->zero_bytes;
+    bool writable = file_aux->writable;
 	/* TODO: Load the segment from the file */
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */
+	// 기존 load_segment
+	// ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
+	// ASSERT (pg_ofs (upage) == 0);
+	// ASSERT (ofs % PGSIZE == 0);
+
+	file_seek (file, ofs);
+	/* Get a page of memory. */
+	uint8_t *kpage = page->frame->kva;
+	if (kpage == NULL)
+		return false;
+
+	/* Load this page. */
+	if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes) {
+		palloc_free_page (kpage);
+		return false;
+	}
+	memset (kpage + page_read_bytes, 0, page_zero_bytes);
+
+	/* Add the page to the process's address space. */
+	// if (!install_page (upage, kpage, writable)) {
+	// 	printf("fail\n");
+	// 	palloc_free_page (kpage);
+	// 	return false;
+	// }
+
+	// /* Advance. */
+	// read_bytes -= page_read_bytes;
+	// zero_bytes -= page_zero_bytes;
+	// upage += PGSIZE;
+	return true;
 }
 
 /* Loads a segment starting at offset OFS in FILE at address
@@ -800,15 +855,24 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
-		void *aux = NULL;
+		// 승훈 참고 +++
+		struct off_f *aux = (struct off_f *)malloc(sizeof(struct off_f));
+		aux->file = file;
+		aux->ofs = ofs; // ofs 을 지속적으로 움직여줘야한다..?
+		aux->upage = upage;
+		aux->read_bytes = page_read_bytes;
+		aux->zero_bytes = page_zero_bytes;
+		aux->writable = writable;
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
 					writable, lazy_load_segment, aux))
+			// free(aux);
 			return false;
 
 		/* Advance. */
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
+		ofs += page_read_bytes;
 	}
 	return true;
 }
@@ -816,14 +880,46 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 /* Create a PAGE of stack at the USER_STACK. Return true on success. */
 static bool
 setup_stack (struct intr_frame *if_) {
-	bool success = false;
 	void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
-
+	bool success_alloc = vm_alloc_page(VM_ANON, stack_bottom , true);
+	bool success_frame = false;
+	struct supplemental_page_table *spt = &thread_current()->spt;
+	struct page *page = spt_find_page(spt, stack_bottom);
+	if (page != NULL) {
+			success_frame = vm_claim_page(stack_bottom);
+			if (success_frame) {		
+				if_->rsp = USER_STACK;
+			}
+			else {
+				return false;
+			}
+	}
+	else {
+		return false;
+	}
+	// frame , page 선언 + do_claim 하는 것을 직접 해준다.
 	/* TODO: Map the stack on stack_bottom and claim the page immediately.
 	 * TODO: If success, set the rsp accordingly.
 	 * TODO: You should mark the page is stack. */
 	/* TODO: Your code goes here */
-
-	return success;
+	return success_frame;
 }
-#endif /* VM */
+// /* pseudo
+// Create a minimal stack by mapping a zeroed page at the USER_STACK
+// static bool
+// setup_stack (struct intr_frame *if_) {
+// 	uint8_t *kpage;
+// 	bool success = false;
+
+// 	kpage = palloc_get_page (PAL_USER | PAL_ZERO);
+// 	if (kpage != NULL) {
+// 		success = install_page (((uint8_t *) USER_STACK) - PGSIZE, kpage, true);
+// 		if (success)
+// 			if_->rsp = USER_STACK;
+// 		else
+// 			palloc_free_page (kpage);
+// 	}
+// 	return success;
+// }
+	// pseudo */
+// #endif /* VM */
