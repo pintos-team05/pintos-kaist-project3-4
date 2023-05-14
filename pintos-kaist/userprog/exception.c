@@ -143,6 +143,7 @@ page_fault (struct intr_frame *f) {
 	/* For project 3 and later. */
 	if (vm_try_handle_fault (f, fault_addr, user, write, not_present))
 		return;
+	exit(-1);
 #endif
 	/* Count page faults. */
 	page_fault_cnt++;
@@ -153,7 +154,8 @@ page_fault (struct intr_frame *f) {
 			not_present ? "not present" : "rights violation",
 			write ? "writing" : "reading",
 			user ? "user" : "kernel");
-	exit(-1);
+	// add 
+	//exit(-1);
 
 }
 

@@ -41,7 +41,7 @@ page_get_type(struct page *page)
 static struct frame *vm_get_victim(void);
 static bool vm_do_claim_page(struct page *page);
 static struct frame *vm_evict_frame(void);
-struct list frame_table;
+// struct list frame_table;
 
 /* Create the pending page object with initializer. If you want to create a
  * page, do not create it directly and make it through this function or
@@ -60,26 +60,28 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage, bool writabl
 		/* TODO: Create the page, fetch the initialier according to the VM type,
 		 * TODO: and then create "uninit" page struct by calling uninit_new. You
 		 * TODO: should modify the field after calling the uninit_new. */
-		struct page *new_page = palloc_get_page(PAL_USER);
-		if (new_page != NULL){
-			switch (type)
-			{
-			case VM_ANON:
-				// new_page->va = upage;
-				// new_page->frame = NULL;
-				uninit_new(new_page,upage,init,type,aux,anon_initializer);
-				break;
-			case VM_FILE:
-				// new_page->va = upage;
-				// new_page->frame = NULL;
-				uninit_new(new_page,upage,init,type,aux,file_backed_initializer);
-				break;
-			default:
-				break;
-			}
-			/* TODO: Insert the page into the spt. */
-			return spt_insert_page(spt,new_page);
+		// struct page *new_page = palloc_get_page(PAL_USER);
+		struct page *new_page = (struct page *)malloc(sizeof(struct page));
+		// if (new_page != NULL){
+		switch (VM_TYPE(type))
+		{
+		case VM_ANON:
+			// new_page->va = upage;
+			// new_page->frame = NULL;
+			uninit_new(new_page,upage,init,type,aux,anon_initializer);
+			break;
+		case VM_FILE:
+			// new_page->va = upage;
+			// new_page->frame = NULL;
+			uninit_new(new_page,upage,init,type,aux,file_backed_initializer);
+			break;
+		default:
+			break;
 		}
+		new_page->writable = writable;
+		/* TODO: Insert the page into the spt. */
+		return spt_insert_page(spt,new_page);
+		// }
 	}
 	return false;
 err:
@@ -91,11 +93,12 @@ struct page *
 spt_find_page(struct supplemental_page_table *spt UNUSED, void *va UNUSED)
 {
 	struct page *page = NULL;
+	page = (struct page *)malloc(sizeof(struct page));
 	/* TODO: Fill this function. */
 	struct hash_elem *e;
-	page->va = va;
+	page->va = pg_round_down(va);
 	e = hash_find (&spt->spt_hash, &page->hash_elem);
-	return e != NULL ? hash_entry (e, struct page, hash_elem) : NULL;	
+	return e != NULL ? hash_entry (e, struct page, hash_elem) : NULL;
 
 	// return page;
 }
@@ -107,7 +110,7 @@ bool spt_insert_page(struct supplemental_page_table *spt UNUSED,
 	int succ = false;
 	/* TODO: Fill this function. */
 	struct hash_elem *result = hash_insert(&spt->spt_hash, &page->hash_elem);
-	if (result != NULL){
+	if (result == NULL){
 		succ = true;
 	}
 
@@ -150,15 +153,18 @@ vm_get_frame(void)
 {
 	// struct frame *frame = NULL;
 	/* TODO: Fill this function. */
-	struct frame *frame = palloc_get_page(PAL_USER);
+	// struct frame *frame = palloc_get_page(PAL_USER);
+	struct frame *frame = malloc(sizeof(struct frame));
+	// struct frame *frame = calloc(1,sizeof(struct frame));
+	
 	frame->page = NULL;
 	// ?
-	frame->kva = NULL;
+	frame->kva = palloc_get_page(PAL_USER);
 
 	if (frame == NULL) {
 		PANIC ("todo");
 	}
-	// ASSERT(frame != NULL);
+	ASSERT(frame != NULL);
 	ASSERT(frame->page == NULL);
 	return frame;
 }
@@ -176,15 +182,31 @@ vm_handle_wp(struct page *page UNUSED)
 }
 
 /* Return true on success */
+// 맵핑 안 된 것하고 lazy loading 만 고려?
 bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED,
 						 bool user UNUSED, bool write UNUSED, bool not_present UNUSED)
 {
 	struct supplemental_page_table *spt UNUSED = &thread_current()->spt;
-	struct page *page = NULL;
+	// struct page *page = NULL;
 	/* TODO: Validate the fault */
 	/* TODO: Your code goes here */
 
-	return vm_do_claim_page(page);
+	struct page *page = spt_find_page(spt,pg_round_down(addr));
+	// if (page == NULL || is_kernel_vaddr(addr)){
+	if (page == NULL){
+		return false;
+	}
+	return vm_claim_page(page->va);
+
+	// if (not_present){
+	// 	struct page *page = spt_find_page(spt,pg_round_down(addr));
+	// 	// if (page == NULL || is_kernel_vaddr(addr)){
+	// 	if (page == NULL){
+	// 		return false;
+	// 	}
+	// 	return vm_claim_page(page->va);
+	// }
+	// return false;
 }
 
 /* Free the page.
@@ -200,10 +222,9 @@ bool vm_claim_page(void *va UNUSED)
 {
 	struct page *page = spt_find_page(&thread_current()->spt,va);
 	/* TODO: Fill this function */
-
-	// page = palloc_get_page(PAL_USER);
-	// page->frame = ?
-	// page->va = va;
+	if (page == NULL){
+		return false;
+	}
 	return vm_do_claim_page(page);
 }
 
@@ -221,12 +242,14 @@ vm_do_claim_page(struct page *page)
 	/* TODO: Insert page table entry to map page's VA to frame's PA. */
 	// install_page (void *upage, void *kpage, bool writable) 
 	struct thread *cur = thread_current();
-	if (pml4_set_page(cur->pml4,page,frame,is_writable(cur->pml4))){
-		return false;
-	}
 
-	// return swap_in(page, frame->kva);
-	return true;
+	pml4_set_page(cur->pml4,page->va,frame->kva,page->writable);
+	// if (pml4_set_page(cur->pml4,page->va,frame->kva,is_writable(cur->pml4))){
+	// 	return false;
+	// }
+
+	return swap_in(page, frame->kva);
+	// return true;
 }
 
 /* Initialize new supplemental page table */

@@ -226,7 +226,7 @@ void remove_file(int fd) {
 void validate_address(void *addr) {
 	struct thread *t = thread_current();
 	
-	if (is_kernel_vaddr(addr) || (pml4_get_page (t->pml4, addr) == NULL)){
+	if (is_kernel_vaddr(addr)|| addr == NULL || pml4_get_page(t->pml4, addr) == NULL) {
 		exit(-1);
 	}
 }
@@ -266,7 +266,12 @@ pid_t fork(struct intr_frame *f) {
 
 int exec(const char* file) {
 	validate_address(file);
-	return process_exec(file);
+
+	// return process_exec(file);
+	if (process_exec(file) == -1){
+		return -1;
+	}
+	NOT_REACHED();
 
 }
 
@@ -283,6 +288,7 @@ struct file *get_file(int fd) {
 
 bool create(const char *file, unsigned initial_size) {
 	bool success;
+	validate_address(file);
 	if(file == NULL){
 		exit(-1);
 	}
@@ -336,8 +342,15 @@ int open(const char *file) {
 /* close file corresponds to file descriptor fd */
 void close(int fd) {
 	/* Acquire global lock */
+	// validate_address(fd);
+
+	if (fd < 2 || fd > FDCOUNT_LIMIT){
+		return NULL;
+	}
 	lock_acquire(&filesys_lock);
-	struct file *file_ptr = thread_current()->fdt[fd];
+	// struct file *file_ptr = thread_current()->fdt[fd];
+	struct file *file_ptr = thread_current()->fdt[fd];	
+	// struct file *file_ptr = ;
 
 	if (file_ptr == NULL){
 		lock_release(&filesys_lock);
