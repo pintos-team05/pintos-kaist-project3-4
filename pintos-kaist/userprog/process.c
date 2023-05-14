@@ -707,6 +707,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 			palloc_free_page (kpage);
 			return false;
 		}
+
 		memset (kpage + page_read_bytes, 0, page_zero_bytes);
 
 		/* Add the page to the process's address space. */
@@ -765,10 +766,55 @@ install_page (void *upage, void *kpage, bool writable) {
  * upper block. */
 
 static bool
+install_page (void *upage, void *kpage, bool writable) {
+	struct thread *t = thread_current ();
+
+	/* Verify that there's not already a page at that virtual
+	 * address, then map our page there. */
+	return (pml4_get_page (t->pml4, upage) == NULL
+			&& pml4_set_page (t->pml4, upage, kpage, writable));
+}
+
+
+static bool
 lazy_load_segment (struct page *page, void *aux) {
+
+	// vm_claim_page (page->va);
+	// vm_do_claim_page(page); // initialize uninit page 
+
+	struct lazy_load_info *info = (struct lazy_load_info*) aux;
+	struct file *file = info->file;
+	off_t ofs = info->ofs;
+	uint8_t *upage = info->upage;
+	uint32_t page_read_bytes = info->read_bytes;
+	uint32_t page_zero_bytes = info->zero_bytes;
+	bool writable = info->writable;
+
+	uint8_t *kpage = page->frame->kva;
+
+	if (kpage == NULL)
+		return false;
+		
+	file_seek(file, ofs);
+	if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes) {
+		free(info);
+		palloc_free_page (kpage);
+		return false;
+	}
+	memset (kpage + page_read_bytes, 0, page_zero_bytes);
+	// if (!install_page (upage, kpage, writable)) {
+	// 	printf("fail\n");
+	// 	palloc_free_page (kpage);
+	// 	return false;
+	// }
+	return true;
+	
+	// file_read (struct file *file, void *buffer, off_t size)
+	// 1. file read -> page fault없이 file_read가 성공해야 하고, 그 값이 physical frame에 저장되어야 함
 	/* TODO: Load the segment from the file */
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */
+	
 }
 
 /* Loads a segment starting at offset OFS in FILE at address
@@ -798,17 +844,32 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		 * and zero the final PAGE_ZERO_BYTES bytes. */
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
-
-		/* TODO: Set up aux to pass information to the lazy_load_segment. */
+		
 		void *aux = NULL;
-		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
-					writable, lazy_load_segment, aux))
+		struct lazy_load_info *info = (struct lazy_load_info *)malloc(sizeof(struct lazy_load_info));
+		if (info == NULL) return false;
+
+		info->file = file;
+		info->ofs = ofs;
+		info->upage = upage;
+		info->read_bytes = page_read_bytes;
+		info->zero_bytes = page_zero_bytes;
+		info->writable = writable;
+
+		aux = info;
+		/* TODO: Set up aux to pass information to the lazy_load_segment. */
+		
+		if (!vm_alloc_page_with_initializer (VM_ANON, upage, writable, lazy_load_segment, aux)){
+			free(info);
 			return false;
+		}
 
 		/* Advance. */
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
+		ofs += page_read_bytes;
+		
 	}
 	return true;
 }
@@ -818,6 +879,21 @@ static bool
 setup_stack (struct intr_frame *if_) {
 	bool success = false;
 	void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
+	struct supplemental_page_table *spt = &thread_current()->spt;
+	
+	// vm_alloc_page(VM_ANON, page, ) // NULL, NULL 인자로 vm_alloc_page_with_initialize 호출하는 함수
+	if (vm_alloc_page(VM_ANON, stack_bottom, true)){
+		struct page *page = spt_find_page (spt, stack_bottom);
+		if (page != NULL){
+			if (vm_claim_page(stack_bottom)){
+				if_->rsp = USER_STACK;
+				success = true;
+			}
+		}
+	}
+	else{
+		success = false;
+	}
 
 	/* TODO: Map the stack on stack_bottom and claim the page immediately.
 	 * TODO: If success, set the rsp accordingly.
@@ -826,4 +902,21 @@ setup_stack (struct intr_frame *if_) {
 
 	return success;
 }
-#endif /* VM */
+#endif /* VM */ 
+
+
+// static bool
+// setup_stack (struct intr_frame *if_) {
+// 	uint8_t *kpage;
+// 	bool success = false;
+
+// 	kpage = palloc_get_page (PAL_USER | PAL_ZERO);
+// 	if (kpage != NULL) {
+// 		success = install_page (((uint8_t *) USER_STACK) - PGSIZE, kpage, true);
+// 		if (success)
+// 			if_->rsp = USER_STACK;
+// 		else
+// 			palloc_free_page (kpage);
+// 	}
+// 	return success;
+// }

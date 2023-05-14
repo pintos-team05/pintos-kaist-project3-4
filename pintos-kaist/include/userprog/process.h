@@ -12,4 +12,14 @@ void process_activate (struct thread *next);
 
 void push_args(char **argv, int argc, struct intr_frame *if_);
 
+struct lazy_load_info {
+	struct file *file;
+	off_t ofs;
+	uint8_t *upage;
+	uint32_t read_bytes;
+	uint32_t zero_bytes;
+	bool writable;
+};
+
+
 #endif /* userprog/process.h */

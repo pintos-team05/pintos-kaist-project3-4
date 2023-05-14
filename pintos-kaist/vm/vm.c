@@ -66,32 +66,32 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 	ASSERT (VM_TYPE(type) != VM_UNINIT)
 
 	struct supplemental_page_table *spt = &thread_current ()->spt;
-
 	/* Check wheter the upage is already occupied or not. */
-	if (spt_find_page (spt, upage) == NULL) { 
+	struct page *page = spt_find_page(spt, upage);
+	if (page == NULL) { 
+
 		/* TODO: Create the page, fetch the initializer according to the VM type,
 		 * TODO: and then create "uninit" page struct by calling uninit_new. You
 		 * TODO: should modify the field after calling the uninit_new. */
-
 		/* TODO: Insert the page into the spt. */
-
-		struct page *page = palloc_get_page(PAL_USER);
-		if (page != NULL){
+		struct page *page_new = (struct page *)malloc(sizeof(struct page));
+		// page->va = palloc_get_page(PAL_USER);
+		if (page_new != NULL){
 			switch (VM_TYPE(type)) {
 				case VM_ANON:
-					page->frame = NULL;
-					uninit_new(page, upage, init, type, aux, &anon_initializer);
+					page_new->frame = NULL;
+					uninit_new(page_new, upage, init, type, aux, &anon_initializer);
 					break;
 				case VM_FILE:
-					page->frame = NULL;
-					uninit_new(page, upage, init, type, aux, &file_backed_initializer);
+					page_new->frame = NULL;
+					uninit_new(page_new, upage, init, type, aux, &file_backed_initializer);
 					break;
 				default:
-				    palloc_free_page(page);
+				    free(page_new);
 					return false;
 			}
-			page->va = upage;
-			return spt_insert_page(spt, page);
+			// page->va = upage;
+			return spt_insert_page(spt, page_new);
 		}
 	}
 	return false;  // true ? or false ?
@@ -103,17 +103,22 @@ err:
 /* Find VA from spt and return page. On error, return NULL. */
 struct page *
 spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
-	struct page *page = NULL;
+	struct page *page = calloc(1, sizeof(struct page));
 
 	struct page p;
 	struct hash_elem *e;
 
 	/* TODO: Fill this function. */
-	p.va = va;
+	p.va = pg_round_down(va);
 	e = hash_find(&spt->pages, &p.hash_elem);
-	e != NULL ? hash_entry (e, struct page, hash_elem) : NULL;
-	
-	return page;
+	if (e != NULL){
+		page = hash_entry(e, struct page, hash_elem);
+		return page;
+	}
+	else{
+		free(page);
+		return NULL;
+	}
 }
 
 /* Insert PAGE into spt with validation. */
@@ -162,16 +167,15 @@ vm_evict_frame (void) {
  * space.*/
 static struct frame *
 vm_get_frame (void) {
-	struct frame *frame = NULL;
+	struct frame *frame = calloc(1, sizeof(struct frame));
+	// struct frame *frame = palloc_get_page(PAL_USER);
 	/* TODO: Fill this function. */
-	frame = palloc_get_page(PAL_USER);
+	frame->kva = palloc_get_page(PAL_USER);
+	frame->page = NULL;
 
-	if (frame != NULL){
-		frame->kva = frame;     // ???
-		frame->page = NULL;
-	}
-	else{
-		PANIC("todo");
+	
+	if (frame->kva == NULL){
+		PANIC("todo"); // swap in / out
 	}
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
@@ -192,26 +196,33 @@ vm_handle_wp (struct page *page UNUSED) {
 bool
 vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
+
 	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
 	struct page *page = NULL;
 	
 	/* TODO: Validate the fault */
-	page = spt_find_page(spt, addr);
-	if (is_kernel_vaddr(addr) || (page == NULL)){
+	if (is_kernel_vaddr (addr))
+		return false;
+
+	page = spt_find_page(spt, pg_round_down(addr));
+	
+	if (page == NULL){
 		return false;
 	}
 
 	if (page->frame == NULL){
-		page->uninit.init(page, page->uninit.aux);
-		
-		
-
-		// load segment;
+		/* The page has not been initialized yet */
+		// obtain the base address of the page containing the faulted virtual address
+		if (!vm_do_claim_page(page))
+			return false;
 	}
 
+	// page->uninit.init(page, page->uninit.aux);
+	// load segment;
+	
 	/* TODO: Your code goes here */
 
-	return vm_do_claim_page (page);
+	return true;
 }
 
 /* Free the page.
@@ -282,8 +293,8 @@ page_less (const struct hash_elem *a_, const struct hash_elem *b_, void *aux UNU
 /* Initialize new supplemental page table */
 void
 supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
-	struct hash pages;
-	hash_init(&pages, page_hash, page_less, NULL);
+
+	hash_init(&spt->pages, page_hash, page_less, NULL);
 }
 
 /* Copy supplemental page table from src to dst */
