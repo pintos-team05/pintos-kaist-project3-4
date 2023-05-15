@@ -316,11 +316,51 @@ supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
 bool
 supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 		struct supplemental_page_table *src UNUSED) {
+
+	struct hash_iterator i;
+	hash_first(&i, &src->pages);
+	while (hash_next (&i)){
+
+		struct page *parent_page = hash_entry (hash_cur (&i), struct page, hash_elem);
+		enum vm_type type_parent = page_get_type(parent_page);
+		
+		switch (VM_TYPE (parent_page->operations->type)) {
+
+			case VM_UNINIT:
+				vm_alloc_page(type_parent, parent_page->va, true);
+				break;
+			case VM_ANON:
+				vm_alloc_page(type_parent, parent_page->va, true);
+				struct page *child_page = spt_find_page(dst, parent_page->va);
+
+				if (child_page == NULL)
+					return false;
+
+				if (!vm_do_claim_page(child_page))
+					return false; 
+
+				memcpy(child_page->frame->kva, parent_page->frame->kva, PGSIZE);
+				break;
+			case VM_FILE:
+				break;
+			default:
+				break;
+			}
+				
+		}
+	return true;
 }
 
 /* Free the resource hold by the supplemental page table */
 void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
+	
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
+	// struct hash_iterator i;
+	// hash_first(&i, &spt->pages);
+	// while (hash_next (&i)){
+		
+	// }
+
 }
