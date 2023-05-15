@@ -226,7 +226,7 @@ void remove_file(int fd) {
 void validate_address(void *addr) {
 	struct thread *t = thread_current();
 	
-	if (is_kernel_vaddr(addr) || (pml4_get_page (t->pml4, addr) == NULL)){
+	if (is_kernel_vaddr(addr)){
 		exit(-1);
 	}
 }
@@ -357,6 +357,8 @@ int read(int fd, void *buffer, unsigned size) {
 	// Return the number of bytes actually read (0 at end of file), or -1 if fails
 	// if fd is 0, it reads from keyboard using input_getc(), 
 	// otherwise reads from file using file_read() function
+	if (fd < 0 || fd >= FDCOUNT_LIMIT)
+		return -1;
 
 	validate_address(buffer);
 	lock_acquire(&filesys_lock);

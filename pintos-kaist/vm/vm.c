@@ -187,6 +187,8 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		if (!vm_do_claim_page(page))
 			return false;
 	}
+	if((pml4_get_page (thread_current ()->pml4, addr) == NULL))
+		return false;
 	
 	return true;
 	// return vm_do_claim_page (page);
