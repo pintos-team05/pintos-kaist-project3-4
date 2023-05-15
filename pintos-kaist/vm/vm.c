@@ -4,6 +4,7 @@
 #include "vm/vm.h"
 #include "vm/inspect.h"
 #include "lib/kernel/hash.h"
+#include <string.h>
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -245,6 +246,40 @@ supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
 bool
 supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 		struct supplemental_page_table *src UNUSED) {
+	struct hash_iterator i;
+
+   hash_first (&i, src);
+   while (hash_next (&i))
+   {
+   		struct page *page_parent = hash_entry (hash_cur (&i), struct page, hash_elem);
+		enum vm_type type_parent = page_get_type (page_parent);
+		int ty = VM_TYPE (page_parent->operations->type);
+		switch (ty)
+		{
+		case VM_UNINIT:
+			vm_alloc_page(type_parent, page_parent->va, true);
+			break;
+		case VM_ANON:
+			vm_alloc_page(type_parent, page_parent->va, true);
+			struct page *page_child = spt_find_page(dst, page_parent->va);
+			
+			if (page_child == NULL)
+				return NULL;
+			
+			if(!vm_do_claim_page(page_child))
+				return false;
+			
+			struct frame *frame_child = page_child->frame;
+			memcpy(frame_child->kva, page_parent->frame->kva, PGSIZE);
+			break;
+		case VM_FILE:
+			/* */
+			break;
+		default:
+			break;
+		}
+   }
+   return true;
 }
 
 /* Free the resource hold by the supplemental page table */
@@ -252,6 +287,7 @@ void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
+	
 }
 
 /* Returns a hash value for page p. */
