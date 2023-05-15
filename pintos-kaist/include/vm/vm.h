@@ -58,6 +58,7 @@ struct page {
 
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
+	// union => 같은 메모리를 씀. (uninit, anon, file)
 	union {
 		struct uninit_page uninit;
 		struct anon_page anon;

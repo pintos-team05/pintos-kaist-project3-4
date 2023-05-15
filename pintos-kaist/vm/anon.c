@@ -2,6 +2,9 @@
 
 #include "vm/vm.h"
 #include "devices/disk.h"
+// project 3 add header
+#include <string.h>
+// project 3 add header
 
 /* DO NOT MODIFY BELOW LINE */
 static struct disk *swap_disk;
@@ -31,6 +34,7 @@ anon_initializer (struct page *page, enum vm_type type, void *kva) {
 	page->operations = &anon_ops;
 
 	struct anon_page *anon_page = &page->anon;
+	
 }
 
 /* Swap in the page by read contents from the swap disk. */
@@ -49,4 +53,7 @@ anon_swap_out (struct page *page) {
 static void
 anon_destroy (struct page *page) {
 	struct anon_page *anon_page = &page->anon;
+	// free(anon_page);
+	// memset(anon_page, 0, sizeof(struct anon_page));
+	// palloc_free_page(page);
 }
