@@ -169,6 +169,8 @@ vm_get_frame (void) {
 /* Growing the stack. */
 static void
 vm_stack_growth (void *addr UNUSED) {
+	// struct page *page = palloc_get_page(PAL_USER);
+	vm_alloc_page(VM_ANON,addr,true);
 }
 
 /* Handle the fault on write_protected page */
@@ -182,28 +184,58 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
 	struct supplemental_page_table *spt UNUSED= &thread_current ()->spt;
 	struct page *page = NULL;
-	// +++
+	struct thread *th = thread_current();
+	uintptr_t rsp = f->rsp;
+	if (!user) {
+		rsp = th->th_rsp;
+	} 
 	if (is_kernel_vaddr(addr)) {
 		return false;
 	}
-	/* TODO: Validate the fault */
-	// check bad ptr;
-	// check not_present;
-	if ((page = spt_find_page(spt, pg_round_down(addr))) == NULL) {
+	if (KERN_BASE > addr && USER_STACK < addr) {
 		return false;
 	}
-	if (page->frame == NULL) {
-		if (!vm_do_claim_page(page)) {
+	if ((rsp < addr || rsp-8 == addr) && (USER_STACK - 1048576 <= addr)) {
+		vm_stack_growth(pg_round_down(addr));
+		/* TODO: Validate the fault */
+		// check bad ptr;
+		// check not_present;
+		if ((page = spt_find_page(spt, pg_round_down(addr))) == NULL) {
 			return false;
 		}
+		if (page->frame == NULL) {
+			if (!vm_do_claim_page(page)) {
+				return false;
+			}
+		}
+		if (pml4_get_page(thread_current()->pml4, pg_round_down(addr)) == NULL) {
+			return false;
+		}
+		// if (not_present || !user) {
+		// 	return false;
+		// }
+		/* TODO: Your code goes here */
 	}
-	if (pml4_get_page(thread_current()->pml4, pg_round_down(addr)) == NULL) {
-		return false;
+	else {
+		/* TODO: Validate the fault */
+		// check bad ptr;
+		// check not_present;
+		if ((page = spt_find_page(spt, pg_round_down(addr))) == NULL) {
+			return false;
+		}
+		if (page->frame == NULL) {
+			if (!vm_do_claim_page(page)) {
+				return false;
+			}
+		}
+		if (pml4_get_page(thread_current()->pml4, pg_round_down(addr)) == NULL) {
+			return false;
+		}
+		// if (not_present || !user) {
+		// 	return false;
+		// }
+		/* TODO: Your code goes here */
 	}
-	// if (not_present || !user) {
-	// 	return false;
-	// }
-	/* TODO: Your code goes here */
 	return true;
 }
 

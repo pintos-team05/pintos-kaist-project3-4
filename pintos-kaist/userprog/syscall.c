@@ -81,6 +81,10 @@ void
 syscall_handler (struct intr_frame *f UNUSED) {
 	// /* Arguments: %rdi %rsi %rdx %r10 %r8 %r9 */
 	// // TODO: Your implementation goes here.
+	// project 3 add for stack_growth
+	struct thread *th = thread_current();
+	th->th_rsp = f->rsp;
+	// project 3 add for stack_growth
 	switch(f->R.rax){
 		case SYS_HALT:
 		{

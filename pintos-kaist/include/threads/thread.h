@@ -136,6 +136,9 @@ struct thread {
 	struct intr_frame pf;					// parent interrupt frame
 	/* Owned by thread.c. */
 	struct intr_frame tf;               /* Information for switching */
+	// project 3 add struct member
+	uintptr_t * th_rsp;
+	// project 3 add struct member
 	unsigned magic;                     /* Detects stack overflow. */
 };
 

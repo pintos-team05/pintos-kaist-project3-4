@@ -914,7 +914,7 @@ setup_stack (struct intr_frame *if_) {
 // 	if (kpage != NULL) {
 // 		success = install_page (((uint8_t *) USER_STACK) - PGSIZE, kpage, true);
 // 		if (success)
-// 			if_->rsp = USER_STACK;
+			// if_->rsp = USER_STACK;
 // 		else
 // 			palloc_free_page (kpage);
 // 	}
