@@ -118,6 +118,8 @@ struct thread {
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */
 	struct supplemental_page_table spt;
+	/* Project3 variable for stack grow */
+	uintptr_t rsp_user;			/* Saved stack pointer */
 #endif
 	struct semaphore fork_sema;
 	struct semaphore exit_sema;

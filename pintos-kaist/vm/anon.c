@@ -50,4 +50,7 @@ anon_swap_out (struct page *page) {
 static void
 anon_destroy (struct page *page) {
 	struct anon_page *anon_page = &page->anon;
+	// palloc_free_page(page);
+	// free(&page->anon);
+	memset(anon_page, 0, sizeof(struct anon_page));
 }

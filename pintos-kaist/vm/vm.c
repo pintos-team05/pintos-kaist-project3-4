@@ -55,8 +55,8 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		/* TODO: Create the page, fetch the initialier according to the VM type,
 		 * TODO: and then create "uninit" page struct by calling uninit_new. You
 		 * TODO: should modify the field after calling the uninit_new. */
-		// struct page *page_new = palloc_get_page(PAL_USER);
-		struct page *page_new = (struct page *)malloc(sizeof(struct page));
+		struct page *page_new = palloc_get_page(PAL_USER);
+		// struct page *page_new = (struct page *)malloc(sizeof(struct page));
 		if(page_new == NULL) 
 			goto err;
 		
@@ -161,8 +161,12 @@ vm_get_frame (void) {
 /* Growing the stack. */
 static void
 vm_stack_growth (void *addr UNUSED) {
+	struct thread *curr = thread_current ();
+	// void *rsp = pg_round_down(curr->rsp_user);
+	void *new_stack_bottom = (void *) ((uint8_t *) pg_round_down(addr));
 
-
+	vm_alloc_page(VM_ANON, new_stack_bottom, true);
+	bool success = vm_claim_page(new_stack_bottom);
 }
 
 /* Handle the fault on write_protected page */
@@ -179,6 +183,28 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	/* TODO: Validate the fault */
 	/* TODO: Your code goes here */
 	/* May be need to handler more case */
+
+	/* page fault caused by stack pointer */
+	struct thread *curr = thread_current ();
+	/* The maximum stack size of project3 is a 1MB */
+	if (user && ((void*)f->rsp < addr || (void*)f->rsp -8 == addr))
+	{
+		if(addr >= (USER_STACK - PGSIZE*256) && addr <= USER_STACK)
+		{
+			curr->rsp_user = f->rsp;
+			vm_stack_growth(addr);
+			return true;
+		}
+	}
+	else if(!user && ((void*)curr->rsp_user < addr || (void*)curr->rsp_user -8 == addr))
+	{
+		if(addr >= (USER_STACK - PGSIZE*256) && addr <= USER_STACK)
+		{
+			vm_stack_growth(addr);
+			return true;
+		}
+	}
+
 	page = spt_find_page (spt, addr);
 	if(page == NULL || is_kernel_vaddr(addr))
 		return false;
@@ -281,13 +307,23 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
    }
    return true;
 }
-
+void destroyer (struct hash_elem *target_e, void *aux)
+{
+	struct page *target = hash_entry(target_e, struct page, hash_elem);
+	destroy(target); 
+	// palloc_free_page(target);
+}
 /* Free the resource hold by the supplemental page table */
 void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
+	if (spt==NULL)
+		return;
 	
+	// hash_destroy(&spt->pages, destroyer);
+	hash_clear(&spt->pages, destroyer);
+
 }
 
 /* Returns a hash value for page p. */

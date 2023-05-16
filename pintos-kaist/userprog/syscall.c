@@ -81,6 +81,8 @@ void
 syscall_handler (struct intr_frame *f UNUSED) {
 	// /* Arguments: %rdi %rsi %rdx %r10 %r8 %r9 */
 	// // TODO: Your implementation goes here.
+	struct thread *curr = thread_current();
+	curr->rsp_user=f->rsp;
 	switch(f->R.rax){
 		case SYS_HALT:
 		{
