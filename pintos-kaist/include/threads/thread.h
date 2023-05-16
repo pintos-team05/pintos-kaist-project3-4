@@ -118,6 +118,7 @@ struct thread {
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */
 	struct supplemental_page_table spt;
+	uintptr_t rsp_user;
 #endif
 	struct semaphore fork_sema;
 	struct semaphore exit_sema;

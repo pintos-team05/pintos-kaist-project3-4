@@ -75,7 +75,7 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		 * TODO: and then create "uninit" page struct by calling uninit_new. You
 		 * TODO: should modify the field after calling the uninit_new. */
 		/* TODO: Insert the page into the spt. */
-		struct page *page_new = (struct page *)malloc(sizeof(struct page));
+		struct page *page_new = palloc_get_page(PAL_USER);
 		// page->va = palloc_get_page(PAL_USER);
 		if (page_new != NULL){
 			switch (VM_TYPE(type)) {
@@ -88,7 +88,7 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 					uninit_new(page_new, upage, init, type, aux, &file_backed_initializer);
 					break;
 				default:
-				    free(page_new);
+				    palloc_free_page(page_new);
 					return false;
 			}
 			// page->va = upage;
@@ -186,19 +186,27 @@ vm_get_frame (void) {
 /* Growing the stack. */
 static void
 vm_stack_growth (void *addr UNUSED) {
+	struct thread *t = thread_current();
+	struct supplemental_page_table *spt = &t->spt;
+	// page fault가 난 지점을 찾고(addr), 현재 스택 공간이 어디까지 할당되었는지 확인한 뒤
+	// 늘려야 할 만큼 늘려 준다 -> 일단 한 페이지만 늘려볼까? 한 페이지만 늘려주면 됨
+
+	// void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
+	void *stack_bottom = pg_round_down(addr);
+
+	if (vm_alloc_page(VM_ANON, stack_bottom, true)) {
+		struct page *page = spt_find_page(spt, stack_bottom);
+		if (page != NULL) {
+			vm_claim_page(stack_bottom);
+		}
+	}
+	/* 1. validate addr */
 }
 
 /* Handle the fault on write_protected page */
 static bool
 vm_handle_wp (struct page *page UNUSED) {
 }
-
-void validate_address2(void *addr) {
-	struct thread *t = thread_current();
-	if (is_kernel_vaddr(addr) || (pml4_get_page(t->pml4, addr)) == NULL)
-		exit(-1);
-}
-
 
 /* Return true on success */
 bool
@@ -207,10 +215,31 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 
 	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
 	struct page *page = NULL;
-	
+	struct thread *curr = thread_current();
+	void *fault_addr = addr;
+
 	/* TODO: Validate the fault */
 	if (is_kernel_vaddr (addr))
 		return false;
+
+	// 들어온 fault_addr이 rsp - 8 위치에 있거나, rsp
+
+	// user mode일 때 stack 영역에서 page fault가 발생한 경우
+	// addr 지점이 stack 영역에 해당되면, 그 지점
+	if (user && ((fault_addr == (f->rsp - 8)) || (f->rsp < fault_addr))) {
+    	if (fault_addr >= (USER_STACK - PGSIZE * 250) && (fault_addr < USER_STACK)) {
+        	vm_stack_growth(fault_addr);
+        	return true;
+    	}
+	}
+	
+
+	else if (!user && ((fault_addr == (curr->rsp_user - 8)) || (curr->rsp_user < fault_addr))) {
+		if (fault_addr >= (USER_STACK - PGSIZE * 250) && (fault_addr < USER_STACK))  {
+            vm_stack_growth(fault_addr);
+			return true;
+        }
+	}
 
 	page = spt_find_page(spt, pg_round_down(addr));
 	
@@ -226,10 +255,8 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	}
 	if (pml4_get_page(thread_current()->pml4, pg_round_down(addr)) == NULL)
 		return false;
-
-	// validate_address2(addr);
 	
-
+	
 
 	// page->uninit.init(page, page->uninit.aux);
 	// load segment;
@@ -328,6 +355,7 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 
 			case VM_UNINIT:
 				vm_alloc_page(type_parent, parent_page->va, true);
+				
 				break;
 			case VM_ANON:
 				vm_alloc_page(type_parent, parent_page->va, true);
@@ -351,9 +379,21 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 	return true;
 }
 
+void destroyer(struct hash_elem *hash_e, void *aux UNUSED){
+
+	// struct page *p = hash_entry(hash_e, struct page, hash_elem);
+	struct page *p = hash_entry (hash_e, struct page, hash_elem);
+	destroy(p);
+
+	return ;
+}
+
 /* Free the resource hold by the supplemental page table */
 void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
+
+	hash_clear(&spt->pages, destroyer);
+
 	
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */

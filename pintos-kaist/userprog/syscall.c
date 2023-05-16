@@ -79,6 +79,8 @@ syscall_init (void) {
 /* The main system call interface */
 void
 syscall_handler (struct intr_frame *f UNUSED) {
+	struct thread *t = thread_current();
+	t->rsp_user = f->rsp;
 	// /* Arguments: %rdi %rsi %rdx %r10 %r8 %r9 */
 	// // TODO: Your implementation goes here.
 	switch(f->R.rax){
