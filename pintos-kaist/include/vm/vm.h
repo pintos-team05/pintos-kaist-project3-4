@@ -52,6 +52,7 @@ struct page {
 	//project 3 add struct_elem
 	struct hash_elem hash_elem;
 	bool writable;
+	
 	//project 3 add struct_elem
 	
 	/* Your implementation */

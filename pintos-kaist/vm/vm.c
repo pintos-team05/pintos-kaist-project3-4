@@ -64,8 +64,7 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 
 	/* Check whether the upage is already occupied or not. */
 	if (spt_find_page (spt, pg_round_down(upage)) == NULL) {
-		struct page * new_page = palloc_get_page(PAL_USER);
-		// struct page * new_page = calloc(1, sizeof(struct page));
+		struct page * new_page = calloc(1, sizeof(struct page));
 		/* TODO: Create the page, fetch the initialier according to the VM type,
 		 * TODO: and then create "uninit" page struct by calling uninit_new. You
 		 * TODO: should modify the field after calling the uninit_new. */
@@ -153,7 +152,8 @@ vm_evict_frame (void) {
  * space.*/
 static struct frame *
 vm_get_frame (void) {
-	struct frame *frame = palloc_get_page(PAL_USER);
+	// page-linear 는 calloc 으로바꾸면 됨. palloc 안됨.
+	struct frame *frame = calloc(1, sizeof(struct frame));
 	/* TODO: Fill this function. */
 	frame->kva = palloc_get_page(PAL_USER);
 	frame->page = NULL;
@@ -195,7 +195,7 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	if (KERN_BASE > addr && USER_STACK < addr) {
 		return false;
 	}
-	if ((rsp < addr || rsp-8 == addr) && (USER_STACK - 1048576 <= addr)) {
+	if ((rsp < addr || rsp-8 == addr) && (USER_STACK - (1<<20) <= addr)) {
 		vm_stack_growth(pg_round_down(addr));
 		/* TODO: Validate the fault */
 		// check bad ptr;
@@ -211,9 +211,10 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		if (pml4_get_page(thread_current()->pml4, pg_round_down(addr)) == NULL) {
 			return false;
 		}
-		// if (not_present || !user) {
-		// 	return false;
-		// }
+		// testcase mmap-ro
+		if (!not_present) {
+			return false;
+		}
 		/* TODO: Your code goes here */
 	}
 	else {
@@ -231,9 +232,9 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		if (pml4_get_page(thread_current()->pml4, pg_round_down(addr)) == NULL) {
 			return false;
 		}
-		// if (not_present || !user) {
-		// 	return false;
-		// }
+		if (!not_present) {
+			return false;
+		}
 		/* TODO: Your code goes here */
 	}
 	return true;
@@ -280,7 +281,7 @@ vm_do_claim_page (struct page *page) {
 	page->frame = frame;
 
 	/* TODO: Insert page table entry to map page's VA to frame's PA. */
-	bool success = install_page(page->va, frame->kva, true);
+	bool success = install_page(page->va, frame->kva, page->writable);
 	if (success == NULL) {
 		return false;
 	}
@@ -309,16 +310,28 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 				break;
 			case VM_ANON:
 				vm_alloc_page(type_parent, page_parent->va, page_parent->writable);
-				struct page *page_child = spt_find_page(dst, page_parent->va);
-				if (page_child == NULL) {
+				struct page *page_child_anon = spt_find_page(dst, page_parent->va);
+				if (page_child_anon == NULL) {
 					return false;
 				}
-				if (!vm_do_claim_page(page_child)) {
+				if (!vm_do_claim_page(page_child_anon)) {
 					return false;
 				}
-				memcpy(page_child->frame->kva, page_parent->frame->kva, PGSIZE);
+				memcpy(page_child_anon->frame->kva, page_parent->frame->kva, PGSIZE);
 				break;
 			case VM_FILE:
+				vm_alloc_page(type_parent, page_parent->va, page_parent->writable);
+				struct page *page_child_file = spt_find_page(dst, page_parent->va);
+				if (page_child_file == NULL) {
+					return false;
+				}
+				if (!vm_do_claim_page(page_child_file)) {
+					return false;
+				}
+				if (page_parent->file.file != NULL){
+					page_child_file->file.file = file_duplicate(page_parent->file.file);
+				}
+				memcpy(page_child_file->frame->kva, page_parent->frame->kva, PGSIZE);
 				break;
 			default:
 				break;

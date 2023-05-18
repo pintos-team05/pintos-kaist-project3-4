@@ -41,6 +41,8 @@ struct file *get_file(int fd);
 int add_file(struct file *file);
 void remove_file(int fd);
 
+void *mmap (void *addr, int64_t length, int writable, int fd, off_t offset);
+void munmap (void *addr);
 
 /* System call.
  *
@@ -189,6 +191,22 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		{
 			thread_exit();
 		}
+		case SYS_MMAP:
+		{	// /* Arguments: %rdi %rsi %rdx %r10 %r8 %r9 */
+			void *addr = f->R.rdi;
+			size_t length = f->R.rsi;
+			int writable = f->R.rdx;
+			int fd = f->R.r10;
+			off_t offset = f->R.r8;
+			f->R.rax = mmap(addr, length, writable, fd, offset);
+			break;
+		}
+		case SYS_MUNMAP:
+		{
+			void *addr = f->R.rdi;
+			munmap(addr);
+			break;
+		}
 
 	// 	// case SYS_DUP2:                   /* Duplicate the file descriptor */
 	// 	// {
@@ -230,7 +248,7 @@ void remove_file(int fd) {
 void validate_address(void *addr) {
 	struct thread *t = thread_current();
 	if (is_kernel_vaddr(addr)) {
-		exit(-1);
+		return NULL;
 	}
 }
 
@@ -454,4 +472,34 @@ unsigned tell(int fd) {
 	struct file *file_ptr = get_file(fd);
 
 	return file_tell(file_ptr);
+}
+// testcase length 가 음수로 들어와서, unsigned int 로 하면 안됨.
+void *mmap (void *addr, int64_t length, int writable, int fd, off_t offset) {
+	struct supplemental_page_table *spt = &thread_current()->spt;
+	struct file *file = get_file(fd);
+	if (length <= 0) {
+		return NULL;
+	}
+	if (offset % PGSIZE != 0){
+		return NULL;
+	}
+	if (file == NULL) {
+		return NULL;
+	}
+	if (is_kernel_vaddr(addr)) {
+		return NULL;
+	}
+	if (spt_find_page(spt, addr)|| pg_round_down(addr) != addr || file_length(file) == 0) {
+		return NULL;
+	}
+	return do_mmap(addr, length, writable, file, offset);
+}
+
+void munmap (void *addr) {
+	struct supplemental_page_table *spt = &thread_current()->spt;
+	validate_address(addr);
+	if (spt_find_page(spt, addr) != addr) {
+		return;
+	}	
+	do_munmap(addr);
 }

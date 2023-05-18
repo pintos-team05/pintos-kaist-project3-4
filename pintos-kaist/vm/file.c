@@ -1,6 +1,10 @@
 /* file.c: Implementation of memory backed file object (mmaped object). */
 
 #include "vm/vm.h"
+//project 3 add header
+#include "../include/userprog/process.h"
+#include "../include/threads/mmu.h"
+//project 3 add header
 
 static bool file_backed_swap_in (struct page *page, void *kva);
 static bool file_backed_swap_out (struct page *page);
@@ -44,15 +48,102 @@ file_backed_swap_out (struct page *page) {
 static void
 file_backed_destroy (struct page *page) {
 	struct file_page *file_page UNUSED = &page->file;
+	if (pml4_is_dirty(&thread_current()->pml4, page->va)) {
+		file_write(file_page->file, page->frame->kva, PGSIZE);
+	}
+}
+bool
+lazy_load_segment_file (struct page *page, void *aux) {
+	// vm_claim_page(page);
+	struct off_f *file_aux = aux;
+	struct file *file = file_aux->file;
+    off_t ofs = file_aux->ofs;
+    uint8_t *upage = file_aux-> upage;
+    uint32_t page_read_bytes = file_aux->read_bytes;
+    uint32_t page_zero_bytes = file_aux->zero_bytes;
+    bool writable = file_aux->writable;
+
+	/* TODO: Load the segment from the file */
+	/* TODO: This called when the first page fault occurs on address VA. */
+	/* TODO: VA is available when calling this function. */
+	// 기존 load_segment 일부 발췌
+	file_seek (file, ofs);
+	/* Get a page of memory. */
+	uint8_t *kpage = page->frame->kva;
+	if (kpage == NULL)
+		return false;
+
+	/* Load this page. */
+	if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes) {
+		palloc_free_page (kpage);
+		return false;
+	}
+	memset (kpage + page_read_bytes, 0, page_zero_bytes);
+
+	return true;
 }
 
 /* Do the mmap */
 void *
 do_mmap (void *addr, size_t length, int writable,
 		struct file *file, off_t offset) {
+	struct supplemental_page_table *spt = &thread_current()->spt;
+	if (addr == NULL || length <= 0) {
+		return NULL;
+	}
+
+	void *start_addr = addr;
+
+	// load_segment 참고 +++
+	uint32_t read_bytes = length < file_length(file) ? length : file_length(file);
+	uint32_t zero_bytes = (read_bytes%PGSIZE) == 0 ? 0 : PGSIZE - (read_bytes%PGSIZE);
+	while (read_bytes > 0 || zero_bytes > 0) {
+		/* Do calculate how to fill this page.
+		 * We will read PAGE_READ_BYTES bytes from FILE
+		 * and zero the final PAGE_ZERO_BYTES bytes. */
+		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+		size_t page_zero_bytes = PGSIZE - page_read_bytes;
+
+		struct off_f *aux = (struct off_f *)malloc(sizeof(struct off_f));
+		aux->file = file;
+		aux->ofs = offset;
+		aux->upage = addr;
+		aux->read_bytes = page_read_bytes;
+		aux->zero_bytes = page_zero_bytes;
+		aux->writable = writable;
+		if (!vm_alloc_page_with_initializer (VM_FILE, addr, writable, lazy_load_segment_file, aux)) {
+			free(aux);
+			return false;
+		}
+		
+		struct page *page = spt_find_page(spt, addr);
+		page->file.file = file;
+		/* Advance. */
+		read_bytes -= page_read_bytes;
+		zero_bytes -= page_zero_bytes;
+		addr += PGSIZE;
+		offset += page_read_bytes;
+	}
+	return start_addr;
 }
 
 /* Do the munmap */
 void
 do_munmap (void *addr) {
+	struct supplemental_page_table *spt = &thread_current()->spt;
+	struct page *page = spt_find_page(spt, addr);
+	struct file *file = page->file.file;
+	int length = PGSIZE < file_length(file) ? PGSIZE : file_length(file);
+	while (length > 0) {
+		if (pml4_is_dirty(&thread_current()->pml4, addr) || page->writable != 0) {
+			file_write(file , page->frame->kva, PGSIZE);
+		}
+		pml4_clear_page(&thread_current()->pml4, addr);
+		// page = NULL;
+		spt_remove_page(spt, page);
+		hash_delete(&spt->hash_table, &page->hash_elem);
+		length -= PGSIZE;
+		addr += PGSIZE;
+		
+	}
 }
