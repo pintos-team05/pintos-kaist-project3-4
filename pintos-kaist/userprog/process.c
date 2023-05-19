@@ -196,6 +196,7 @@ __do_fork (void *aux) {
 	}
 
 	current->next_fd = parent->next_fd;
+	
 	// current->running_file = file_duplicate(parent->running_file);
 	process_init ();
 
@@ -791,6 +792,7 @@ lazy_load_segment (struct page *page, void *aux) {
 	bool writable = info->writable;
 
 	uint8_t *kpage = page->frame->kva;
+	uint64_t *pml4 = thread_current()->pml4;
 
 	if (kpage == NULL)
 		return false;
@@ -801,16 +803,14 @@ lazy_load_segment (struct page *page, void *aux) {
 		palloc_free_page (kpage);
 		return false;
 	}
+
 	memset (kpage + page_read_bytes, 0, page_zero_bytes);
-	// if (!install_page (upage, kpage, writable)) {
-	// 	printf("fail\n");
-	// 	palloc_free_page (kpage);
-	// 	return false;
-	// }
+	pml4_set_page(pml4, upage, kpage, writable);
+	
+	free(info);
+
 	return true;
 	
-	// file_read (struct file *file, void *buffer, off_t size)
-	// 1. file read -> page fault없이 file_read가 성공해야 하고, 그 값이 physical frame에 저장되어야 함
 	/* TODO: Load the segment from the file */
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */

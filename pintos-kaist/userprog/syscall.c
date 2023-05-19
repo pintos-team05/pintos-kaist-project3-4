@@ -36,6 +36,9 @@ int filesize(int fd);
 void seek(int fd, unsigned position);
 unsigned tell(int fd);
 void exit(int status);
+void *mmap (void *addr, int64_t length, int writable, int fd, off_t offset);
+void munmap (void *addr);
+
 
 struct file *get_file(int fd);
 int add_file(struct file *file);
@@ -183,6 +186,23 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			close(fd);
 			break;
 		}
+		case SYS_MMAP:
+		{
+			void *addr = f->R.rdi;
+			size_t length = f->R.rsi;
+			int writable = f->R.rdx;
+			int fd = f->R.r10;
+			off_t offset = f->R.r8;
+			
+			f->R.rax = mmap(addr, length, writable, fd, offset);
+			break;
+		}
+		case SYS_MUNMAP:
+		{
+			void *addr = f->R.rdi;
+			munmap(addr);
+			break;
+		}
 		default:
 		{
 			thread_exit();
@@ -229,7 +249,6 @@ void validate_address(void *addr) {
 	struct thread *t = thread_current();
 	if (is_kernel_vaddr(addr))
 		exit(-1);
-		
 }
 
 
@@ -356,13 +375,39 @@ void close(int fd) {
 	return 0;
 }
 
+
+
+// void validate_buffer(void* buffer, unsigned size) {
+// 	struct thread *t = thread_current();
+// 	uint64_t *pml4 = thread_current()->pml4;
+// 	uint64_t *pte = pml4e_walk (pml4, (uint64_t) buffer, 0);
+// 	bool writable = is_writable(pte);
+// 	if (!writable)
+// 		exit(-1);
+
+// 	if (is_kernel_vaddr(buffer))
+// 		exit(-1);
+// 	if (is_kernel_vaddr(buffer+size))
+// 		exit(-1);
+
+// }
+
+
+
 int read(int fd, void *buffer, unsigned size) {
 	// Read size bytes from the file open as fd into buffer.
 	// Return the number of bytes actually read (0 at end of file), or -1 if fails
 	// if fd is 0, it reads from keyboard using input_getc(), 
 	// otherwise reads from file using file_read() function
 
+	// struct thread *t = thread_current();
+	// uint64_t *pml4 = thread_current()->pml4;
+	// uint64_t *pte = pml4e_walk (pml4, (uint64_t) buffer, 0);
+	// bool writable = is_writable(pte);
+	// if (!writable)
+	// 	exit(-1);
 	validate_address(buffer);
+	
 	lock_acquire(&filesys_lock);
 	off_t read_size = 0;
 	char *read_buffer = (char *)buffer;
@@ -398,6 +443,14 @@ int write(int fd, const void *buffer, unsigned size) {
 	// Returns the number of bytes actually written.
 	// If fd is 1, it write to the console using putbuf(), 
 	// otherwise write to the file using file_write() function
+	
+	// struct thread *t = thread_current();
+	// uint64_t *pml4 = thread_current()->pml4;
+	// uint64_t *pte = pml4e_walk (pml4, (uint64_t) buffer, 0);
+	// bool writable = is_writable(pte);
+	// if (!writable)
+	// 	exit(-1);
+
 	validate_address(buffer);
 	lock_acquire(&filesys_lock);
 	off_t written_size = 0;
@@ -453,3 +506,52 @@ unsigned tell(int fd) {
 
 	return file_tell(file_ptr);
 }
+
+void *mmap(void *addr, int64_t length, int writable, int fd, off_t offset){
+	// TODO :  exception handling
+	if (offset % PGSIZE != 0)
+		return NULL;
+
+	if (fd < 2 || fd >= FDCOUNT_LIMIT)
+		return NULL;
+
+	struct file* file = get_file(fd);
+
+	if (file == NULL)
+		return NULL;
+
+	off_t len_file = file_length(file);
+		
+	if (addr == NULL)
+		return NULL;
+
+	if (addr != pg_round_down(addr))
+		return NULL;
+
+	if (is_kernel_vaddr(addr))
+		return NULL;
+
+	if (length <= 0)
+		return NULL;
+
+	if (len_file <= 0)
+		return NULL;
+
+
+	return do_mmap(addr, length, writable, file, offset);
+}
+
+
+void munmap (void *addr) {
+	// TODO : exception handling
+	if (addr != pg_round_down(addr) || is_kernel_vaddr(addr) || (addr == NULL))
+		return;
+
+	do_munmap(addr);
+
+}
+
+// void *
+// mmap (void *addr, size_t length, int writable, int fd, off_t offset) {
+// 	return (void *) syscall5 (SYS_MMAP, addr, length, writable, fd, offset);
+// }

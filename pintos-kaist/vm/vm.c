@@ -3,7 +3,7 @@
 #include "threads/malloc.h"
 #include "vm/vm.h"
 #include "vm/inspect.h"
-
+#include "threads/mmu.h"
 /* Adds a mapping from user virtual address UPAGE to kernel
  * virtual address KPAGE to the page table.
  * If WRITABLE is true, the user process may modify the page;
@@ -70,12 +70,12 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 	/* Check wheter the upage is already occupied or not. */
 	struct page *page = spt_find_page(spt, upage);
 	if (page == NULL) { 
-
+	
 		/* TODO: Create the page, fetch the initializer according to the VM type,
 		 * TODO: and then create "uninit" page struct by calling uninit_new. You
 		 * TODO: should modify the field after calling the uninit_new. */
 		/* TODO: Insert the page into the spt. */
-		struct page *page_new = palloc_get_page(PAL_USER);
+		struct page *page_new = calloc(1, sizeof(struct page));
 		// page->va = palloc_get_page(PAL_USER);
 		if (page_new != NULL){
 			switch (VM_TYPE(type)) {
@@ -219,11 +219,10 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	void *fault_addr = addr;
 
 	/* TODO: Validate the fault */
-	if (is_kernel_vaddr (addr))
+	if (user && (is_kernel_vaddr (addr)))   // no effect ;;
 		return false;
 
 	// 들어온 fault_addr이 rsp - 8 위치에 있거나, rsp
-
 	// user mode일 때 stack 영역에서 page fault가 발생한 경우
 	// addr 지점이 stack 영역에 해당되면, 그 지점
 	if (user && ((fault_addr == (f->rsp - 8)) || (f->rsp < fault_addr))) {
@@ -253,9 +252,11 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		if (!vm_do_claim_page(page))
 			return false;
 	}
-	if (pml4_get_page(thread_current()->pml4, pg_round_down(addr)) == NULL)
+	if (pml4_get_page(thread_current()->pml4, addr) == NULL)
 		return false;
 	
+	if (!not_present)
+		return false;
 	
 
 	// page->uninit.init(page, page->uninit.aux);
@@ -299,8 +300,12 @@ vm_do_claim_page (struct page *page) {
 	frame->page = page;
 	page->frame = frame;
 
+	// uint64_t *pml4 = &thread_current()->pml4;
+	// uint64_t *pte = pml4e_walk (pml4, (uint64_t) page->va, false);
+	bool writable = true;
+
 	/* TODO: Insert page table entry to map page's VA to frame's PA. */
-	bool success = install_page(page->va, frame->kva, 1);
+	bool success = install_page(page->va, frame->kva, writable);
 	// pml4_set_page(&thread_current()->pml4, page, frame, 1);
 
 	if (!success) {
@@ -370,6 +375,14 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 				memcpy(child_page->frame->kva, parent_page->frame->kva, PGSIZE);
 				break;
 			case VM_FILE:
+				vm_alloc_page(type_parent, parent_page->va, true);
+				struct page *child_page2 = spt_find_page(dst, parent_page->va);
+
+				if (child_page2 == NULL)
+					return false;
+				if (!vm_do_claim_page(child_page2))
+					return false;
+				memcpy(child_page2->frame->kva, parent_page->frame->kva, PGSIZE);
 				break;
 			default:
 				break;
