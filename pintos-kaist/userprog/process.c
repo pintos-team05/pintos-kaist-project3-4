@@ -761,14 +761,6 @@ setup_stack (struct intr_frame *if_) {
 /* From here, codes will be used after project 3.
  * If you want to implement the function for only project 2, implement it on the
  * upper block. */
-struct load_info {
-	struct file *file;
-	off_t ofs;
-	uint8_t *upage;
-	uint32_t read_bytes;
-	uint32_t zero_bytes; 
-	bool writable;
-};
 static bool
 lazy_load_segment (struct page *page, void *aux) {
 	/* TODO: Load the segment from the file */
@@ -801,6 +793,8 @@ lazy_load_segment (struct page *page, void *aux) {
 	}
 
 	/* Load this page. */
+	// int temp = file_read (file, kpage, page_read_bytes);
+	// int temp2 = file_length(file);
 	if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes) {
 		palloc_free_page (kpage);
 		free(info);
@@ -808,6 +802,10 @@ lazy_load_segment (struct page *page, void *aux) {
 	}
 	memset (kpage + page_read_bytes, 0, page_zero_bytes);
 	free(info);
+
+	struct thread *t = thread_current ();
+	pml4_set_page (t->pml4, upage, kpage, writable);
+	
 	return true;
 }
 

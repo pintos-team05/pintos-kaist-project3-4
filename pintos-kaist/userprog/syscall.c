@@ -12,7 +12,8 @@
 
 #include "filesys/file.h"
 #include "filesys/filesys.h"
-// #include "user/syscall.h"
+#include "filesys/inode.h"
+#include "vm/file.h"
 
 typedef int pid_t;
 #define PID_ERROR ((pid_t) -1)
@@ -36,6 +37,8 @@ int filesize(int fd);
 void seek(int fd, unsigned position);
 unsigned tell(int fd);
 void exit(int status);
+void *mmap (void *addr, int64_t length, int writable, int fd, off_t offset);
+void munmap (void *addr);
 
 struct file *get_file(int fd);
 int add_file(struct file *file);
@@ -181,6 +184,17 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		{	
 			int fd = f->R.rdi;
 			close(fd);
+			break;
+		}
+		/* %rdi, %rsi, %rdx, %r10, %r8, %r9 */
+		case SYS_MMAP:
+		{	
+			f->R.rax = mmap ((void *)f->R.rdi, f->R.rsi, f->R.rdx, f->R.r10, f->R.r8);
+			break;
+		}
+		case SYS_MUNMAP:
+		{	
+			munmap ((void *)f->R.rdi);
 			break;
 		}
 		default:
@@ -452,4 +466,28 @@ unsigned tell(int fd) {
 	struct file *file_ptr = get_file(fd);
 
 	return file_tell(file_ptr);
+}
+void *
+mmap (void *addr, int64_t length, int writable, int fd, off_t offset) {
+	struct file *file = get_file(fd);
+	if (file == NULL)
+		return NULL;
+	if (addr == NULL)
+		return NULL;
+	if (length<=0)
+		return NULL;
+	if (file_length(file) == 0)
+		return NULL;
+	if (addr!=pg_round_down(addr))
+		return NULL;
+	if(offset % PGSIZE != 0)
+		return NULL;
+	if (is_kernel_vaddr(addr))
+		return NULL;
+	
+	void *result = do_mmap (addr, length, writable, file, offset);
+	return result;
+}
+void munmap (void *addr) {
+	do_munmap (addr);
 }

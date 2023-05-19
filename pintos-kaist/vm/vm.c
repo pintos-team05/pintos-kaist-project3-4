@@ -55,8 +55,8 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		/* TODO: Create the page, fetch the initialier according to the VM type,
 		 * TODO: and then create "uninit" page struct by calling uninit_new. You
 		 * TODO: should modify the field after calling the uninit_new. */
-		struct page *page_new = palloc_get_page(PAL_USER);
-		// struct page *page_new = (struct page *)malloc(sizeof(struct page));
+		// struct page *page_new = palloc_get_page(0);
+		struct page *page_new = (struct page *)malloc(sizeof(struct page));
 		if(page_new == NULL) 
 			goto err;
 		
@@ -183,7 +183,6 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	/* TODO: Validate the fault */
 	/* TODO: Your code goes here */
 	/* May be need to handler more case */
-
 	/* page fault caused by stack pointer */
 	struct thread *curr = thread_current ();
 	/* The maximum stack size of project3 is a 1MB */
@@ -206,7 +205,7 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	}
 
 	page = spt_find_page (spt, addr);
-	if(page == NULL || is_kernel_vaddr(addr))
+	if(page == NULL || (is_kernel_vaddr(addr)&& user))
 		return false;
 	
 	if (page->frame == NULL)
@@ -216,7 +215,10 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	}
 	if((pml4_get_page (thread_current ()->pml4, addr) == NULL))
 		return false;
-	
+
+	if (!not_present)
+		return false;
+
 	return true;
 	// return vm_do_claim_page (page);
 }
@@ -280,14 +282,17 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
    		struct page *page_parent = hash_entry (hash_cur (&i), struct page, hash_elem);
 		enum vm_type type_parent = page_get_type (page_parent);
 		int ty = VM_TYPE (page_parent->operations->type);
+		struct page *page_child;
+		struct frame *frame_child;
 		switch (ty)
 		{
 		case VM_UNINIT:
 			vm_alloc_page(type_parent, page_parent->va, true);
+			/* Need to be consider the init function and aux variable */
 			break;
 		case VM_ANON:
 			vm_alloc_page(type_parent, page_parent->va, true);
-			struct page *page_child = spt_find_page(dst, page_parent->va);
+			page_child = spt_find_page(dst, page_parent->va);
 			
 			if (page_child == NULL)
 				return NULL;
@@ -295,11 +300,26 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 			if(!vm_do_claim_page(page_child))
 				return false;
 			
-			struct frame *frame_child = page_child->frame;
+			frame_child = page_child->frame;
 			memcpy(frame_child->kva, page_parent->frame->kva, PGSIZE);
 			break;
 		case VM_FILE:
-			/* */
+			vm_alloc_page(type_parent, page_parent->va, true);
+			page_child = spt_find_page(dst, page_parent->va);
+			
+			if (page_child == NULL)
+				return NULL;
+			
+			if(!vm_do_claim_page(page_child))
+				return false;
+			
+			frame_child = page_child->frame;
+			if(page_parent->map_file != NULL)
+			{
+				page_child->map_file = file_duplicate(page_child->map_file);
+				page_child->offset = page_parent->offset;
+			}
+			memcpy(frame_child->kva, page_parent->frame->kva, PGSIZE);
 			break;
 		default:
 			break;
