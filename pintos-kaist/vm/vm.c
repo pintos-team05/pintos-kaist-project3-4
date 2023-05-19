@@ -332,6 +332,7 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 					page_child_file->file.file = file_duplicate(page_parent->file.file);
 				}
 				memcpy(page_child_file->frame->kva, page_parent->frame->kva, PGSIZE);
+				page_child_file->file.file = file_duplicate(page_parent->file.file);
 				break;
 			default:
 				break;

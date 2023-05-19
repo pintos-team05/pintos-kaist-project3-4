@@ -840,7 +840,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
 		// 승훈 참고 +++
-		struct off_f *aux = (struct off_f *)malloc(sizeof(struct off_f));
+		struct off_f *aux = (struct off_f *)calloc(1, sizeof(struct off_f));
 		aux->file = file;
 		aux->ofs = ofs; // ofs 을 지속적으로 움직여줘야한다..?
 		aux->upage = upage;

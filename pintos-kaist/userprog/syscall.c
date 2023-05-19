@@ -150,7 +150,7 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			int fd = f->R.rdi;
 			void *buffer = f->R.rsi;
 			unsigned int size = f->R.rdx;
-			
+
 			f->R.rax = read(fd, buffer, size);
 			break;
 		}
@@ -381,8 +381,16 @@ int read(int fd, void *buffer, unsigned size) {
 	// Return the number of bytes actually read (0 at end of file), or -1 if fails
 	// if fd is 0, it reads from keyboard using input_getc(), 
 	// otherwise reads from file using file_read() function
-
 	validate_address(buffer);
+	// buffer 에 대한 예외처리, - writable check 로 가설.
+	// uint64_t *pte = pml4e_walk(&thread_current()->pml4, buffer, 0);
+	// if (!is_writable(pte)) {
+	// 	return -1;
+	// }
+	// struct page *page = pml4_get_page(&thread_current()->pml4,buffer);
+	// if (page->writable == false) {
+	// 	return -1;
+	// }
 	lock_acquire(&filesys_lock);
 	off_t read_size = 0;
 	char *read_buffer = (char *)buffer;
@@ -498,9 +506,9 @@ void *mmap (void *addr, int64_t length, int writable, int fd, off_t offset) {
 
 void munmap (void *addr) {
 	struct supplemental_page_table *spt = &thread_current()->spt;
-	validate_address(addr);
-	if (spt_find_page(spt, addr) != addr) {
-		return;
-	}	
-	do_munmap(addr);
+	// validate_address(addr);
+	// // if (spt_find_page(spt, addr) == NULL) {
+	// // 	return;
+	// // }
+	do_munmap(addr);	
 }
