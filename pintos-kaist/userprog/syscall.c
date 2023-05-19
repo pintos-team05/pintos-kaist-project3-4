@@ -480,6 +480,7 @@ void *mmap (void *addr, int64_t length, int writable, int fd, off_t offset) {
 	if (length <= 0) {
 		return NULL;
 	}
+	// testcase bad-off 에서 offset 이 pgsize 단위로 들어와야함.
 	if (offset % PGSIZE != 0){
 		return NULL;
 	}
