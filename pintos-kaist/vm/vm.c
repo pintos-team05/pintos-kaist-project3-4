@@ -5,6 +5,8 @@
 #include "vm/inspect.h"
 #include "lib/kernel/hash.h"
 #include <string.h>
+#include "userprog/process.h"
+#include "threads/mmu.h"
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -218,7 +220,7 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 
 	if (!not_present)
 		return false;
-
+		
 	return true;
 	// return vm_do_claim_page (page);
 }
@@ -284,11 +286,18 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 		int ty = VM_TYPE (page_parent->operations->type);
 		struct page *page_child;
 		struct frame *frame_child;
+		struct load_info *aux_child;
 		switch (ty)
 		{
 		case VM_UNINIT:
-			vm_alloc_page(type_parent, page_parent->va, true);
+			aux_child = calloc(1, sizeof(struct load_info));
 			/* Need to be consider the init function and aux variable */
+			/* 	부모랑 자식이 같은  실행 파일의 같은 페이지 부분은 로드 중이면 문제가 발생하지 않는지 확인 필요.
+			아마도 메모리로 로드 하는 과정만 하기 때문에 문제 될것은 없을듯? */
+			memcpy(aux_child, page_parent->uninit.aux, sizeof(struct load_info));
+			vm_alloc_page_with_initializer(type_parent, page_parent->va, true,
+			page_parent->uninit.init, aux_child);
+			// vm_alloc_page(type_parent, page_parent->va, true);
 			break;
 		case VM_ANON:
 			vm_alloc_page(type_parent, page_parent->va, true);
@@ -313,13 +322,12 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 			if(!vm_do_claim_page(page_child))
 				return false;
 			
-			frame_child = page_child->frame;
-			if(page_parent->map_file != NULL)
-			{
-				page_child->map_file = file_duplicate(page_child->map_file);
-				page_child->offset = page_parent->offset;
-			}
-			memcpy(frame_child->kva, page_parent->frame->kva, PGSIZE);
+			// frame_child = page_child->frame;
+			// memcpy(frame_child->kva, page_parent->frame->kva, PGSIZE);
+			// free(page_child->frame->kva);
+			page_child->frame->kva = page_parent->frame->kva;
+			pml4_set_page(dst, page_child->va, page_parent->frame->kva, true);
+			page_child->map_file = file_duplicate(page_parent->map_file);
 			break;
 		default:
 			break;

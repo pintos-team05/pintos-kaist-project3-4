@@ -45,7 +45,33 @@ file_backed_swap_out (struct page *page) {
 static void
 file_backed_destroy (struct page *page) {
 	struct file_page *file_page UNUSED = &page->file;
-	do_munmap(page->va);
+	// do_munmap(page->va);
+	struct supplemental_page_table *spt = &thread_current ()->spt;
+	struct page *p = page;
+
+	if (p == NULL)
+		return;
+	
+	struct file *file = p->map_file;
+	if (file == NULL)
+		return;
+
+	int temp;
+	if(pml4_is_dirty (thread_current()->pml4, p->va))
+	{
+		file_seek(file, p->offset);
+		temp = file_write(file, p->frame->kva, PGSIZE);
+		pml4_set_dirty(thread_current()->pml4, p->va, false);
+	}
+	p->va = NULL;
+	p->map_file = NULL;
+	hash_delete(&spt->pages, &p->hash_elem);
+	pml4_clear_page(thread_current()->pml4, p->va);
+	// free(file);
+	file_close(file);
+	// printf("\n----------------------------------\n");
+	// printf("\n%s\n", (char*)p->frame->kva);
+	// printf("\n----------------------------------\n");
 }
 static bool
 lazy_load_segment_file (struct page *page, void *aux) {
@@ -105,9 +131,6 @@ do_mmap (void *addr, size_t length, int writable,
 	// ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
 	// ASSERT (pg_ofs (upage) == 0);
 	// ASSERT (ofs % PGSIZE == 0);
-
-	// bool (*init) (struct page *, void *) = &lazy_load_segment;
-	
 	struct supplemental_page_table *spt = &thread_current ()->spt;
 	
 	while (read_bytes > 0 || zero_bytes > 0) {
@@ -137,7 +160,7 @@ do_mmap (void *addr, size_t length, int writable,
 			free(info);
 			return NULL;
 		}
-		struct page *page_added = spt_find_page(spt, addr);
+		struct page *page_added = spt_find_page(spt, upage);
 		page_added->map_file = info->file;
 		/* Advance. */
 		read_bytes -= page_read_bytes;
@@ -164,7 +187,7 @@ do_munmap (void *addr) {
 		file = p->map_file;
 		if (file == NULL)
 			return;
-		
+
 		if (file_get_inode(file) != inode)
 			return;
 
@@ -172,6 +195,7 @@ do_munmap (void *addr) {
 		{
 			file_seek(file, p->offset);
 			file_write(file, p->frame->kva, PGSIZE);
+			pml4_set_dirty(thread_current()->pml4, p->va, false);
 		}
 		p->va = NULL;
 		p->map_file = NULL;

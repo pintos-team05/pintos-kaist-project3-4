@@ -386,10 +386,11 @@ process_exit (void) {
 	palloc_free_multiple(cur->fdt, FDT_PAGES);
 	cur->fdt = NULL;
 
+	process_cleanup ();
 	sema_up(&cur->exit_sema);
 	sema_down(&cur->free_sema);
 		
-	process_cleanup ();
+	// process_cleanup ();
 
 
 	// 1. clear children list -> todo when implementing fork(), exec(), wait()

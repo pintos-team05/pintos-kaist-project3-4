@@ -151,6 +151,9 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			unsigned int size = f->R.rdx;
 			
 			f->R.rax = read(fd, buffer, size);
+			if (f->R.rax == -1)
+				exit(-1);
+			
 			break;
 		}
 		case SYS_WRITE:
@@ -377,6 +380,18 @@ int read(int fd, void *buffer, unsigned size) {
 		return -1;
 
 	validate_address(buffer);
+
+	// if (fd >= 2)
+	// {
+	// 	struct thread *curr = thread_current();
+	// 	uint64_t *pte = pml4e_walk (curr->pml4, pg_round_down(buffer), 0);
+	// 	if (pte != NULL)
+	// 	{
+	// 		if (!is_writable(pte))
+	// 			return -1;
+	// 	}
+	// }
+
 	lock_acquire(&filesys_lock);
 	off_t read_size = 0;
 	char *read_buffer = (char *)buffer;
