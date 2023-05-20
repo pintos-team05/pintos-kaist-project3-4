@@ -49,13 +49,13 @@ file_backed_swap_out (struct page *page) {
 static void
 file_backed_destroy (struct page *page) {
 	struct file_page *file_page UNUSED = &page->file;
-	// +++
-	file_seek(file_page->file , page->offset);
-	if (pml4_is_dirty(&thread_current()->pml4, page->va)) {
+	// pml4 함수들에 & 를 넣음..
+	file_seek(page->file.file , page->offset);
+	if (pml4_is_dirty(thread_current()->pml4, page->va)) {
 		lock_acquire(&filesys_lock);
-		file_write(file_page->file, page->frame->kva, PGSIZE);
+		file_write(page->file.file, page->frame->kva, PGSIZE);
 		lock_release(&filesys_lock);
-		pml4_set_dirty(&thread_current()->pml4, page->va,0);
+		pml4_set_dirty(thread_current()->pml4, page->va,0);
 	}
 	pml4_clear_page(thread_current()->pml4, page->va);
 }
@@ -80,16 +80,25 @@ lazy_load_segment_file (struct page *page, void *aux) {
 	file_seek (file, ofs);
 	/* Get a page of memory. */
 	uint8_t *kpage = page->frame->kva;
-	if (kpage == NULL)
+	if (kpage == NULL) {
+		// ++
+		free(file_aux);
+		// ++
 		return false;
-
+	}
 	/* Load this page. */
 	if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes) {
 		palloc_free_page (kpage);
+		// ++
+		free(file_aux);
+		// ++
+
 		return false;
 	}
 	memset (kpage + page_read_bytes, 0, page_zero_bytes);
-
+	// ++
+	free(file_aux);
+	// ++
 	return true;
 }
 
@@ -101,7 +110,6 @@ do_mmap (void *addr, size_t length, int writable,
 	if (addr == NULL || length <= 0) {
 		return NULL;
 	}
-	off_t origin_ofs = offset;
 	void *start_addr = addr;
 	// load_segment 참고 +++
 	uint32_t read_bytes = length < file_length(file) ? length : file_length(file);
@@ -115,7 +123,7 @@ do_mmap (void *addr, size_t length, int writable,
 
 		struct off_f *aux = (struct off_f *)calloc(1, sizeof(struct off_f));
 		// 승훈 참고 +++ testcase close, remove 통과 - file 을 close 하고 다시 접근함. so, duplicate 필요.
-		aux->file = file_reopen(file);
+		aux->file = file_duplicate(file);
 		// 승훈 참고 +++
 		aux->ofs = offset;
 		aux->upage = addr;
@@ -128,6 +136,12 @@ do_mmap (void *addr, size_t length, int writable,
 		}
 		
 		struct page *page = spt_find_page(spt, addr);
+		// ++
+		if(page == NULL) {
+			return NULL;
+		}
+		// ++
+
 		page->file.file = aux->file;
 		/* Advance. */
 		read_bytes -= page_read_bytes;
@@ -135,7 +149,6 @@ do_mmap (void *addr, size_t length, int writable,
 		addr += PGSIZE;
 		offset += page_read_bytes;
 	}
-	offset = origin_ofs;
 	return start_addr;
 }
 
@@ -148,9 +161,7 @@ do_munmap (void *addr) {
 		return;
 	}
 	struct file *file = page->file.file;
-	if (file == NULL) {
-		return;
-	}
+
 	off_t origin_ofs = file_tell(file);
 	int length = PGSIZE < file_length(file) ? PGSIZE : file_length(file);
 	off_t offset = 0;
@@ -164,6 +175,10 @@ do_munmap (void *addr) {
 		}
 		pml4_clear_page(thread_current()->pml4, page->va);
 		hash_delete(&spt->hash_table, &page->hash_elem);
+		// ++
+		free(file);
+		// ++
+
 		length -= PGSIZE;
 		addr += PGSIZE;
 		offset += PGSIZE;
@@ -174,10 +189,6 @@ do_munmap (void *addr) {
 		}
 		// 도영 참고 +++
 		file = page->file.file;
-		if (file == NULL) {
-			return;
-		}
-
 	}
 	// offset 처음 값으로 다시 돌려놓기.!
 	file_seek(file, origin_ofs);

@@ -402,6 +402,7 @@ process_exit (void) {
 	palloc_free_multiple(cur->fdt, FDT_PAGES);
 	cur->fdt = NULL;
 
+	// 자식이 cleanup 해서 변경사항을 바꿔적어야하는 경우에, cleanup 이 아래에 있으면, 부모가 먼저 읽어버림.
 	process_cleanup ();
 	sema_up(&cur->exit_sema);
 	sema_down(&cur->free_sema);

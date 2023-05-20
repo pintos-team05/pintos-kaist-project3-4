@@ -192,9 +192,9 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	if (is_kernel_vaddr(addr)) {
 		return false;
 	}
-	// if (KERN_BASE > addr && USER_STACK < addr) {
-	// 	return false;
-	// }
+	if (KERN_BASE > addr && USER_STACK < addr) {
+		return false;
+	}
 	if ((rsp < addr || rsp-8 == addr) && (USER_STACK - (1<<20) <= addr)) {
 		vm_stack_growth(pg_round_down(addr));
 
