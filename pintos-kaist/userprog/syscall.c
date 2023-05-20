@@ -343,7 +343,7 @@ int open(const char *file) {
 
 	/* Add file to file descriptor table */
 	int fd = add_file(file_ptr);
-	
+
 	if (fd == -1){
 		file_close(file_ptr);
 	}
@@ -406,6 +406,7 @@ int read(int fd, void *buffer, unsigned size) {
 	// bool writable = is_writable(pte);
 	// if (!writable)
 	// 	exit(-1);
+
 	validate_address(buffer);
 	
 	lock_acquire(&filesys_lock);

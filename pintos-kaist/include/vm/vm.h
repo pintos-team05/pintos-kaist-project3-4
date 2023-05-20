@@ -49,6 +49,8 @@ struct page {
 	/* Your implementation */
 	struct hash_elem hash_elem;
 	struct file* mmaped_file;
+
+	off_t mmaped_offset;
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
 	union {

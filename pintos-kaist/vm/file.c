@@ -46,39 +46,35 @@ file_backed_swap_out (struct page *page) {
 /* Destory the file backed page. PAGE will be freed by the caller. */
 static void
 file_backed_destroy (struct page *page) {
-	// 1. file length 찾고, file length가 mapping된 mmaped area 크기만큼 file write 해 준 뒤
-	// 2. file close 
-	// struct file_page *file_page UNUSED = &page->file;
-	// if (page == NULL)
-	// 	return;
+	// struct thread *t = thread_current();
 
-	// struct supplemental_page_table *spt = &thread_current()->spt;
-	// uint64_t *pml4 = thread_current()->pml4;
+	struct file_page *file_page UNUSED = &page->file;
+	if (page == NULL)
+		return;
 
+	off_t mmaped_offset = page->mmaped_offset;
+	struct supplemental_page_table *spt = &thread_current()->spt;
+	uint64_t *pml4 = thread_current()->pml4;
 
-	
-	// void *mmaped_ptr = page->va;
+	struct file *mmaped_file = page->mmaped_file;
 
-	// struct file *mmaped_file = page->mmaped_file;
-	// uint32_t length = file_length(mmaped_file);
-	// uint32_t num_pages = (length % PGSIZE == 0) ? (int) length/PGSIZE : (int)(length/PGSIZE + 1);
-	// uint32_t offset = 0;
+	// int length = (PGSIZE > file_length(mmaped_file)) ? file_length(mmaped_file): PGSIZE;
 
-	// while (num_pages != 0) {
-	// 	struct page *mmaped_page = spt_find_page(spt, mmaped_ptr);
-	// 	file_seek(mmaped_file, offset);
-	// 	if(pml4_is_dirty(pml4, mmaped_ptr)){
-	// 		if (!file_write(mmaped_file, mmaped_page->frame->kva, PGSIZE))
-	// 			return;
-	// 	}
+	if(pml4_is_dirty(pml4, page->va)){
+		file_write_at(page->mmaped_file, page->frame->kva, PGSIZE, page->mmaped_offset);
+	    pml4_set_dirty(pml4, page->va, 0);
+	}
 
-	// 	num_pages -= 1;
-	// 	hash_delete(&spt->pages, &mmaped_page->hash_elem);
-	// 	mmaped_page->va = NULL;
-	// 	mmaped_ptr += PGSIZE;
-	// 	offset += PGSIZE;
-	// }
-	// file_close(mmaped_file);
+	// char *buffer = malloc(513);
+	// file_read(page->mmaped_file, buffer, 512);
+	// buffer[512] = '\0';
+	// printf("file read -> buffer : \n%s\n", buffer);
+	// free(buffer);
+
+	hash_delete(&spt->pages, &page->hash_elem);
+	page->va = NULL;
+
+	file_close(mmaped_file);
 
 }
 
@@ -97,23 +93,13 @@ lazy_load_segment_filebacked (struct page *page, void *aux) {
 	uint8_t *kpage = page->frame->kva;
 	uint64_t *pml4 = thread_current()->pml4;
 
-	struct thread *cur = thread_current();
-	struct file **fdt = cur->fdt;
-
-	// int fd = 2;
-	// for (; fd<FDCOUNT_LIMIT; fd++){
-	// 	if (fdt[fd] == file)
-	// 		break;
-	// }
-	// if (fd == FDCOUNT_LIMIT)
-	// 	return false;
 
 	if (kpage == NULL)
 		return false;
 		
-	file_seek(file, ofs);
+	// file_seek(file, ofs);
 	
-	if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes) {
+	if (file_read_at (file, kpage, page_read_bytes, ofs) != (int) page_read_bytes) {
 		free(info_filebacked);
 		palloc_free_page (kpage);
 		return false;
@@ -170,6 +156,7 @@ do_mmap (void *addr, size_t length, int writable,
 
 			struct page *page = spt_find_page(&thread_current()->spt, addr);
 			page->mmaped_file = file_duplicate(file);
+			page->mmaped_offset = offset;  /* <-- ?? */
 
 			read_bytes -= page_read_bytes;
 			zero_bytes -= page_zero_bytes;
@@ -194,24 +181,21 @@ do_munmap (void *addr) {
 
 	struct file *mmaped_file = page->mmaped_file;
 	int offset_org = file_tell(mmaped_file);
-	uint32_t length = file_length(mmaped_file);
-	uint32_t num_pages = (length % PGSIZE == 0) ? (int) length/PGSIZE : (int)(length/PGSIZE + 1);
-	uint32_t offset = 0;
 
-	
-	while (num_pages != 0) {
+	int length = (PGSIZE > file_length(mmaped_file)) ? file_length(mmaped_file): PGSIZE;
+
+	while (length > 0) {
 		struct page *mmaped_page = spt_find_page(spt, mmaped_ptr);
-		file_seek(mmaped_file, offset);
-		if(pml4_is_dirty(pml4, addr)){
-			if (!file_write(mmaped_file, mmaped_page->frame->kva, PGSIZE))
-				return;
-		}
+		if(pml4_is_dirty(pml4, mmaped_ptr)){
 
-		num_pages -= 1;
+			file_write_at(mmaped_page->mmaped_file, mmaped_page->frame->kva, PGSIZE, mmaped_page->mmaped_offset);
+		    pml4_set_dirty(pml4, mmaped_ptr, 0);
+		}
+		
+		length -= PGSIZE;
 		hash_delete(&spt->pages, &mmaped_page->hash_elem);
 		mmaped_page->va = NULL;
 		mmaped_ptr += PGSIZE;
-		offset += PGSIZE;
 	}
 
 	file_seek(mmaped_file, offset_org);

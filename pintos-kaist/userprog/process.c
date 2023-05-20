@@ -197,7 +197,6 @@ __do_fork (void *aux) {
 
 	current->next_fd = parent->next_fd;
 	
-	// current->running_file = file_duplicate(parent->running_file);
 	process_init ();
 
 	/* Finally, switch to the newly created process. */
@@ -386,10 +385,11 @@ process_exit (void) {
 	palloc_free_multiple(cur->fdt, FDT_PAGES);
 	cur->fdt = NULL;
 
+	process_cleanup ();
 	sema_up(&cur->exit_sema);
 	sema_down(&cur->free_sema);
-		
-	process_cleanup ();
+			
+	
 
 
 	// 1. clear children list -> todo when implementing fork(), exec(), wait()
@@ -780,9 +780,6 @@ install_page (void *upage, void *kpage, bool writable) {
 static bool
 lazy_load_segment (struct page *page, void *aux) {
 
-	// vm_claim_page (page->va);
-	// vm_do_claim_page(page); // initialize uninit page 
-
 	struct lazy_load_info *info = (struct lazy_load_info*) aux;
 	struct file *file = info->file;
 	off_t ofs = info->ofs;
@@ -903,20 +900,3 @@ setup_stack (struct intr_frame *if_) {
 	return success;
 }
 #endif /* VM */ 
-
-
-// static bool
-// setup_stack (struct intr_frame *if_) {
-// 	uint8_t *kpage;
-// 	bool success = false;
-
-// 	kpage = palloc_get_page (PAL_USER | PAL_ZERO);
-// 	if (kpage != NULL) {
-// 		success = install_page (((uint8_t *) USER_STACK) - PGSIZE, kpage, true);
-// 		if (success)
-// 			if_->rsp = USER_STACK;
-// 		else
-// 			palloc_free_page (kpage);
-// 	}
-// 	return success;
-// }

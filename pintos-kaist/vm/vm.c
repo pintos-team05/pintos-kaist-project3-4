@@ -231,7 +231,6 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
         	return true;
     	}
 	}
-	
 
 	else if (!user && ((fault_addr == (curr->rsp_user - 8)) || (curr->rsp_user < fault_addr))) {
 		if (fault_addr >= (USER_STACK - PGSIZE * 250) && (fault_addr < USER_STACK))  {
@@ -258,9 +257,6 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	if (!not_present)
 		return false;
 	
-
-	// page->uninit.init(page, page->uninit.aux);
-	// load segment;
 	
 	/* TODO: Your code goes here */
 
@@ -355,6 +351,7 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 
 		struct page *parent_page = hash_entry (hash_cur (&i), struct page, hash_elem);
 		enum vm_type type_parent = page_get_type(parent_page);
+
 		
 		switch (VM_TYPE (parent_page->operations->type)) {
 
@@ -364,25 +361,31 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 				break;
 			case VM_ANON:
 				vm_alloc_page(type_parent, parent_page->va, true);
-				struct page *child_page = spt_find_page(dst, parent_page->va);
+				struct page *child_page_anon = spt_find_page(dst, parent_page->va);
 
-				if (child_page == NULL)
+				if (child_page_anon == NULL)
 					return false;
 
-				if (!vm_do_claim_page(child_page))
+				if (!vm_do_claim_page(child_page_anon))
 					return false; 
 
-				memcpy(child_page->frame->kva, parent_page->frame->kva, PGSIZE);
+				memcpy(child_page_anon->frame->kva, parent_page->frame->kva, PGSIZE);
 				break;
 			case VM_FILE:
 				vm_alloc_page(type_parent, parent_page->va, true);
-				struct page *child_page2 = spt_find_page(dst, parent_page->va);
+				struct page *child_page_fb = spt_find_page(dst, parent_page->va);
 
-				if (child_page2 == NULL)
+				if (child_page_fb == NULL)
 					return false;
-				if (!vm_do_claim_page(child_page2))
+				if (!vm_do_claim_page(child_page_fb))
 					return false;
-				memcpy(child_page2->frame->kva, parent_page->frame->kva, PGSIZE);
+
+				// struct frame *child_frame = calloc(1, sizeof(struct frame));
+				// child_frame->kva = parent_page->frame->kva;
+				// install_page(child_page_fb->va, child_frame->kva, true);
+				// child_page_fb->frame->kva = parent_page->frame->kva;
+				memcpy(child_page_fb->frame->kva, parent_page->frame->kva, PGSIZE);
+				child_page_fb->mmaped_file = file_duplicate(parent_page->mmaped_file);
 				break;
 			default:
 				break;
@@ -394,10 +397,9 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 
 void destroyer(struct hash_elem *hash_e, void *aux UNUSED){
 
-	// struct page *p = hash_entry(hash_e, struct page, hash_elem);
 	struct page *p = hash_entry (hash_e, struct page, hash_elem);
 	destroy(p);
-
+	free (p);
 	return ;
 }
 
