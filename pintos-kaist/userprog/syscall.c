@@ -150,7 +150,9 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			int fd = f->R.rdi;
 			void *buffer = f->R.rsi;
 			unsigned int size = f->R.rdx;
-
+			if (is_kernel_vaddr(buffer)) {
+				return -1;
+			}
 			f->R.rax = read(fd, buffer, size);
 			break;
 		}
@@ -246,7 +248,6 @@ void remove_file(int fd) {
 }
 
 void validate_address(void *addr) {
-	struct thread *t = thread_current();
 	if (is_kernel_vaddr(addr)) {
 		return NULL;
 	}
@@ -381,7 +382,7 @@ int read(int fd, void *buffer, unsigned size) {
 	// Return the number of bytes actually read (0 at end of file), or -1 if fails
 	// if fd is 0, it reads from keyboard using input_getc(), 
 	// otherwise reads from file using file_read() function
-	validate_address(buffer);
+
 	// buffer 에 대한 예외처리, - writable check 로 가설.
 	// uint64_t *pte = pml4e_walk(&thread_current()->pml4, buffer, 0);
 	// if (!is_writable(pte)) {

@@ -55,9 +55,7 @@ file_backed_destroy (struct page *page) {
 		lock_release(&filesys_lock);
 		pml4_set_dirty(&thread_current()->pml4, page->va,0);
 	}
-	page->va = NULL;
-	page->file.file = NULL;
-	// file_close(&page->file);
+	pml4_clear_page(thread_current()->pml4, page->va);
 }
 bool
 lazy_load_segment_file (struct page *page, void *aux) {
@@ -65,6 +63,7 @@ lazy_load_segment_file (struct page *page, void *aux) {
 	struct off_f *file_aux = aux;
 	struct file *file = file_aux->file;
     off_t ofs = file_aux->ofs;
+	page->offset = ofs;
     uint8_t *upage = file_aux-> upage;
     uint32_t page_read_bytes = file_aux->read_bytes;
     uint32_t page_zero_bytes = file_aux->zero_bytes;
@@ -155,7 +154,7 @@ do_munmap (void *addr) {
 			return;
 		}
 		// 도영 참고 +++
-		file_seek(file, offset);
+		file_seek(file, page->offset);
 		if (pml4_is_dirty(thread_current()->pml4, page->va) && page->writable != 0) {
 			// file_seek(file, offset);
 			lock_acquire(&filesys_lock);

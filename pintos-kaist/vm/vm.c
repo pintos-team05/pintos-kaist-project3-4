@@ -192,9 +192,9 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	if (is_kernel_vaddr(addr)) {
 		return false;
 	}
-	if (KERN_BASE > addr && USER_STACK < addr) {
-		return false;
-	}
+	// if (KERN_BASE > addr && USER_STACK < addr) {
+	// 	return false;
+	// }
 	if ((rsp < addr || rsp-8 == addr) && (USER_STACK - (1<<20) <= addr)) {
 		vm_stack_growth(pg_round_down(addr));
 		/* TODO: Validate the fault */
@@ -306,7 +306,7 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 			switch (VM_TYPE(page_parent->operations->type))
 			{
 			case VM_UNINIT:
-				vm_alloc_page(type_parent, page_parent->va, page_parent->writable);
+				vm_alloc_page_with_initializer(type_parent, page_parent->va, page_parent->writable, page_parent->uninit.init, page_parent->uninit.aux);
 				break;
 			case VM_ANON:
 				vm_alloc_page(type_parent, page_parent->va, page_parent->writable);
@@ -325,14 +325,18 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 				if (page_child_file == NULL) {
 					return false;
 				}
+				
 				if (!vm_do_claim_page(page_child_file)) {
 					return false;
 				}
 				if (page_parent->file.file != NULL){
 					page_child_file->file.file = file_duplicate(page_parent->file.file);
 				}
-				memcpy(page_child_file->frame->kva, page_parent->frame->kva, PGSIZE);
-				page_child_file->file.file = file_duplicate(page_parent->file.file);
+				page_child_file->frame->page = page_parent->frame->page;
+				page_child_file->frame->kva = page_parent->frame->kva;
+				page_child_file->operations = page_parent->operations;
+				// 일단 필요없는 정보 포함 복사
+				page_child_file->offset = page_parent->offset;
 				break;
 			default:
 				break;
@@ -346,6 +350,7 @@ void
 destroyer (struct hash_elem *hash_elem, void *aux) {
 	struct page *p = hash_entry (hash_elem, struct page, hash_elem);
 	destroy(p);
+	free(p);
 }
 /* Free the resource hold by the supplemental page table */
 void
