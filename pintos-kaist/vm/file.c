@@ -49,6 +49,8 @@ file_backed_swap_out (struct page *page) {
 static void
 file_backed_destroy (struct page *page) {
 	struct file_page *file_page UNUSED = &page->file;
+	// +++
+	file_seek(file_page->file , page->offset);
 	if (pml4_is_dirty(&thread_current()->pml4, page->va)) {
 		lock_acquire(&filesys_lock);
 		file_write(file_page->file, page->frame->kva, PGSIZE);
@@ -65,14 +67,16 @@ lazy_load_segment_file (struct page *page, void *aux) {
     off_t ofs = file_aux->ofs;
 	page->offset = ofs;
     uint8_t *upage = file_aux-> upage;
-    uint32_t page_read_bytes = file_aux->read_bytes;
-    uint32_t page_zero_bytes = file_aux->zero_bytes;
+    uint32_t read_bytes = file_aux->read_bytes;
+    uint32_t zero_bytes = file_aux->zero_bytes;
     bool writable = file_aux->writable;
 
 	/* TODO: Load the segment from the file */
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */
 	// 기존 load_segment 일부 발췌
+	size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+	size_t page_zero_bytes = PGSIZE - page_read_bytes;
 	file_seek (file, ofs);
 	/* Get a page of memory. */
 	uint8_t *kpage = page->frame->kva;
@@ -124,7 +128,7 @@ do_mmap (void *addr, size_t length, int writable,
 		}
 		
 		struct page *page = spt_find_page(spt, addr);
-		page->file.file = file_duplicate(file);
+		page->file.file = aux->file;
 		/* Advance. */
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
@@ -144,28 +148,20 @@ do_munmap (void *addr) {
 		return;
 	}
 	struct file *file = page->file.file;
+	if (file == NULL) {
+		return;
+	}
 	off_t origin_ofs = file_tell(file);
 	int length = PGSIZE < file_length(file) ? PGSIZE : file_length(file);
 	off_t offset = 0;
 	while (length > 0) {
-		// 도영 참고 +++
-		file = page->file.file;
-		if (file == NULL) {
-			return;
-		}
-		// 도영 참고 +++
 		file_seek(file, page->offset);
 		if (pml4_is_dirty(thread_current()->pml4, page->va) && page->writable != 0) {
-			// file_seek(file, offset);
 			lock_acquire(&filesys_lock);
 			file_write(file , page->frame->kva, PGSIZE);
 			lock_release(&filesys_lock);
 			pml4_set_dirty(thread_current()->pml4, page->va,0);
 		}
-		// 도영 참고 +++
-		page->va = NULL;
-		page->file.file = NULL;
-		// 도영 참고 +++
 		pml4_clear_page(thread_current()->pml4, page->va);
 		hash_delete(&spt->hash_table, &page->hash_elem);
 		length -= PGSIZE;
@@ -177,6 +173,10 @@ do_munmap (void *addr) {
 			return;
 		}
 		// 도영 참고 +++
+		file = page->file.file;
+		if (file == NULL) {
+			return;
+		}
 
 	}
 	// offset 처음 값으로 다시 돌려놓기.!

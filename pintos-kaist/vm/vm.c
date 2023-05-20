@@ -87,7 +87,7 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		return spt_insert_page(spt, new_page);
 		// (tmp_pseudo)
 	}	
-	return false; // ??? docs QNA 에 따르면 false, 생각은 true;
+	return false;
 err:
 	return false;
 }
@@ -197,9 +197,7 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	// }
 	if ((rsp < addr || rsp-8 == addr) && (USER_STACK - (1<<20) <= addr)) {
 		vm_stack_growth(pg_round_down(addr));
-		/* TODO: Validate the fault */
-		// check bad ptr;
-		// check not_present;
+
 		if ((page = spt_find_page(spt, pg_round_down(addr))) == NULL) {
 			return false;
 		}
@@ -217,25 +215,19 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		}
 		/* TODO: Your code goes here */
 	}
-	else {
-		/* TODO: Validate the fault */
-		// check bad ptr;
-		// check not_present;
-		if ((page = spt_find_page(spt, pg_round_down(addr))) == NULL) {
+	if ((page = spt_find_page(spt, pg_round_down(addr))) == NULL) {
+		return false;
+	}
+	if (page->frame == NULL) {
+		if (!vm_do_claim_page(page)) {
 			return false;
 		}
-		if (page->frame == NULL) {
-			if (!vm_do_claim_page(page)) {
-				return false;
-			}
-		}
-		if (pml4_get_page(thread_current()->pml4, pg_round_down(addr)) == NULL) {
-			return false;
-		}
-		if (!not_present) {
-			return false;
-		}
-		/* TODO: Your code goes here */
+	}
+	if (pml4_get_page(thread_current()->pml4, pg_round_down(addr)) == NULL) {
+		return false;
+	}
+	if (!not_present) {
+		return false;
 	}
 	return true;
 }
@@ -323,10 +315,6 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 				vm_alloc_page(type_parent, page_parent->va, page_parent->writable);
 				struct page *page_child_file = spt_find_page(dst, page_parent->va);
 				if (page_child_file == NULL) {
-					return false;
-				}
-				
-				if (!vm_do_claim_page(page_child_file)) {
 					return false;
 				}
 				if (page_parent->file.file != NULL){

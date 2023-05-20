@@ -402,10 +402,10 @@ process_exit (void) {
 	palloc_free_multiple(cur->fdt, FDT_PAGES);
 	cur->fdt = NULL;
 
+	process_cleanup ();
 	sema_up(&cur->exit_sema);
 	sema_down(&cur->free_sema);
 		
-	process_cleanup ();
 
 
 	// 1. clear children list -> todo when implementing fork(), exec(), wait()
@@ -788,13 +788,15 @@ lazy_load_segment (struct page *page, void *aux) {
 	struct file *file = file_aux->file;
     off_t ofs = file_aux->ofs;
     uint8_t *upage = file_aux-> upage;
-    uint32_t page_read_bytes = file_aux->read_bytes;
-    uint32_t page_zero_bytes = file_aux->zero_bytes;
+    uint32_t read_bytes = file_aux->read_bytes;
+    uint32_t zero_bytes = file_aux->zero_bytes;
     bool writable = file_aux->writable;
 	/* TODO: Load the segment from the file */
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */
 	// 기존 load_segment 일부 발췌
+	size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+	size_t page_zero_bytes = PGSIZE - page_read_bytes;
 	file_seek (file, ofs);
 	/* Get a page of memory. */
 	uint8_t *kpage = page->frame->kva;

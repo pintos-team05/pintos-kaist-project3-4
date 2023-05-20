@@ -392,6 +392,10 @@ int read(int fd, void *buffer, unsigned size) {
 	// if (page->writable == false) {
 	// 	return -1;
 	// }
+	struct page *page = spt_find_page(&thread_current()->spt, buffer);
+	if (page != NULL && !page->writable) {
+		return -1;
+	}
 	lock_acquire(&filesys_lock);
 	off_t read_size = 0;
 	char *read_buffer = (char *)buffer;
