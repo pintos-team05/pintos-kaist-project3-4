@@ -171,6 +171,7 @@ static void
 vm_stack_growth (void *addr UNUSED) {
 	// struct page *page = palloc_get_page(PAL_USER);
 	vm_alloc_page(VM_ANON,addr,true);
+	vm_claim_page(pg_round_down(addr));
 }
 
 /* Handle the fault on write_protected page */
@@ -192,28 +193,17 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	if (is_kernel_vaddr(addr)) {
 		return false;
 	}
-	if (KERN_BASE > addr && USER_STACK < addr) {
-		return false;
-	}
-	if ((rsp < addr || rsp-8 == addr) && (USER_STACK - (1<<20) <= addr)) {
-		vm_stack_growth(pg_round_down(addr));
-
-		if ((page = spt_find_page(spt, pg_round_down(addr))) == NULL) {
-			return false;
+	// user_stack 이 protection 을 위해서 랜덤하게 배정이 된다면, 어떠한 예외처리가 필요할 것으로 보임.
+	// if (KERN_BASE > addr && USER_STACK < addr) {
+	// 	return false;
+	// }
+	// 분기를 합쳤을 때, kern_base 와 user_stack 사이에 접근하는 것을 못잡아냈음.
+	if ((rsp < addr || rsp-8 == addr)) {
+		if (((USER_STACK - (1<<20) <= addr) && addr <= USER_STACK)) {
+			vm_stack_growth(pg_round_down(addr));
+			return true;
+			/* TODO: Your code goes here */
 		}
-		if (page->frame == NULL) {
-			if (!vm_do_claim_page(page)) {
-				return false;
-			}
-		}
-		if (pml4_get_page(thread_current()->pml4, pg_round_down(addr)) == NULL) {
-			return false;
-		}
-		// testcase mmap-ro
-		if (!not_present) {
-			return false;
-		}
-		/* TODO: Your code goes here */
 	}
 	if ((page = spt_find_page(spt, pg_round_down(addr))) == NULL) {
 		return false;
@@ -320,9 +310,11 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 				if (page_parent->file.file != NULL){
 					page_child_file->file.file = file_duplicate(page_parent->file.file);
 				}
+				page_child_file->frame = page_parent->frame;
 				page_child_file->frame->page = page_parent->frame->page;
 				page_child_file->frame->kva = page_parent->frame->kva;
 				page_child_file->operations = page_parent->operations;
+				pml4_set_page(thread_current()->pml4, page_child_file->va, page_parent->frame->kva, page_parent->writable);
 				// 일단 필요없는 정보 포함 복사
 				page_child_file->offset = page_parent->offset;
 				break;

@@ -189,10 +189,6 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			close(fd);
 			break;
 		}
-		default:
-		{
-			thread_exit();
-		}
 		case SYS_MMAP:
 		{	// /* Arguments: %rdi %rsi %rdx %r10 %r8 %r9 */
 			void *addr = f->R.rdi;
@@ -209,12 +205,15 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			munmap(addr);
 			break;
 		}
+		default:
+		{
+			thread_exit();
+		}
 
 	// 	// case SYS_DUP2:                   /* Duplicate the file descriptor */
 	// 	// {
 	// 	// 	dup2();
 	// 	// }
-
 	}
 	// printf ("system call!\n");
 	// thread_exit ();
@@ -384,16 +383,9 @@ int read(int fd, void *buffer, unsigned size) {
 	// otherwise reads from file using file_read() function
 
 	// buffer 에 대한 예외처리, - writable check 로 가설.
-	// uint64_t *pte = pml4e_walk(&thread_current()->pml4, buffer, 0);
-	// if (!is_writable(pte)) {
-	// 	return -1;
-	// }
-	// struct page *page = pml4_get_page(&thread_current()->pml4,buffer);
-	// if (page->writable == false) {
-	// 	return -1;
-	// }
+	uint64_t *pte = pml4e_walk(&thread_current()->pml4, buffer, 0);
 	struct page *page = spt_find_page(&thread_current()->spt, buffer);
-	if (page != NULL && !page->writable) {
+	if (page != NULL && !page->writable && !is_writable(pte)) {
 		return -1;
 	}
 	lock_acquire(&filesys_lock);
@@ -503,7 +495,13 @@ void *mmap (void *addr, int64_t length, int writable, int fd, off_t offset) {
 	if (is_kernel_vaddr(addr)) {
 		return NULL;
 	}
-	if (spt_find_page(spt, addr)|| pg_round_down(addr) != addr || file_length(file) == 0) {
+	// if (spt_find_page(spt, addr)) {
+	// 	return NULL;
+	// }
+	if (pg_round_down(addr) != addr) {
+		return NULL;
+	}
+	if (file_length(file) == 0) {
 		return NULL;
 	}
 	return do_mmap(addr, length, writable, file, offset);

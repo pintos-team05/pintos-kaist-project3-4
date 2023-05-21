@@ -104,17 +104,24 @@ lazy_load_segment_file (struct page *page, void *aux) {
 
 /* Do the mmap */
 void *
-do_mmap (void *addr, size_t length, int writable,
-		struct file *file, off_t offset) {
+do_mmap (void *addr, size_t length, int writable, struct file *file, off_t offset) {
 	struct supplemental_page_table *spt = &thread_current()->spt;
-	if (addr == NULL || length <= 0) {
-		return NULL;
-	}
+	// ++
+
+	// ++
+
+	// if (addr == NULL || length <= 0) {
+	// 	return NULL;
+	// }
 	void *start_addr = addr;
 	// load_segment 참고 +++
 	uint32_t read_bytes = length < file_length(file) ? length : file_length(file);
 	uint32_t zero_bytes = (read_bytes%PGSIZE) == 0 ? 0 : PGSIZE - (read_bytes%PGSIZE);
 	while (read_bytes > 0 || zero_bytes > 0) {
+		struct page *page = spt_find_page(spt, addr);
+		if (page != NULL) {
+			return NULL;
+		}
 		/* Do calculate how to fill this page.
 		 * We will read PAGE_READ_BYTES bytes from FILE
 		 * and zero the final PAGE_ZERO_BYTES bytes. */
@@ -135,14 +142,15 @@ do_mmap (void *addr, size_t length, int writable,
 			return false;
 		}
 		
-		struct page *page = spt_find_page(spt, addr);
+		// struct page *page = spt_find_page(spt, addr);
+		// // ++
+		// if(page == NULL) {
+		// 	return NULL;
+		// }
 		// ++
-		if(page == NULL) {
-			return NULL;
-		}
-		// ++
-
-		page->file.file = aux->file;
+		struct page *page_added = spt_find_page(spt, addr);
+		page_added->file.file = aux->file;
+		// page->file.file = aux->file;
 		/* Advance. */
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
@@ -163,11 +171,12 @@ do_munmap (void *addr) {
 	struct file *file = page->file.file;
 
 	off_t origin_ofs = file_tell(file);
-	int length = PGSIZE < file_length(file) ? PGSIZE : file_length(file);
 	off_t offset = 0;
+	int length = PGSIZE < file_length(file) ? PGSIZE : file_length(file);
 	while (length > 0) {
+		file = page->file.file;
 		file_seek(file, page->offset);
-		if (pml4_is_dirty(thread_current()->pml4, page->va) && page->writable != 0) {
+		if (pml4_is_dirty(thread_current()->pml4, page->va)) {
 			lock_acquire(&filesys_lock);
 			file_write(file , page->frame->kva, PGSIZE);
 			lock_release(&filesys_lock);
@@ -188,7 +197,6 @@ do_munmap (void *addr) {
 			return;
 		}
 		// 도영 참고 +++
-		file = page->file.file;
 	}
 	// offset 처음 값으로 다시 돌려놓기.!
 	file_seek(file, origin_ofs);
