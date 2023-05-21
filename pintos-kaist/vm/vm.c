@@ -1,9 +1,10 @@
 /* vm.c: Generic interface for virtual memory objects. */
-
+#include "list.h"
 #include "threads/malloc.h"
 #include "vm/vm.h"
 #include "vm/inspect.h"
 #include "threads/mmu.h"
+#include "threads/thread.h"
 /* Adds a mapping from user virtual address UPAGE to kernel
  * virtual address KPAGE to the page table.
  * If WRITABLE is true, the user process may modify the page;
@@ -13,6 +14,7 @@
  * with palloc_get_page().
  * Returns true on success, false if UPAGE is already mapped or
  * if memory allocation fails. */
+
 static bool
 install_page (void *upage, void *kpage, bool writable) {
 	struct thread *t = thread_current ();
@@ -82,10 +84,12 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 				case VM_ANON:
 					page_new->frame = NULL;
 					uninit_new(page_new, upage, init, type, aux, &anon_initializer);
+					page_new->writable = writable;
 					break;
 				case VM_FILE:
 					page_new->frame = NULL;
 					uninit_new(page_new, upage, init, type, aux, &file_backed_initializer);
+					page_new->writable = writable;
 					break;
 				default:
 				    palloc_free_page(page_new);
@@ -146,8 +150,14 @@ spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
 /* Get the struct frame, that will be evicted. */
 static struct frame *
 vm_get_victim (void) {
-	struct frame *victim = NULL;
+	struct frame *victim;
+	if (!list_empty(&frame_list)){
+		victim = list_entry(list_begin(&frame_list), struct frame, f_elem);
+		}
+	else
+		victim = NULL;
 	 /* TODO: The policy for eviction is up to you. */
+	 
 
 	return victim;
 }
@@ -157,8 +167,11 @@ vm_get_victim (void) {
 static struct frame *
 vm_evict_frame (void) {
 	struct frame *victim UNUSED = vm_get_victim ();
-	/* TODO: swap out the victim and return the evicted frame. */
-
+	if (victim != NULL){
+		list_remove(&victim->f_elem);
+		swap_out(victim->page);
+		return victim;
+	}
 	return NULL;
 }
 
@@ -176,10 +189,13 @@ vm_get_frame (void) {
 
 	
 	if (frame->kva == NULL){
-		PANIC("todo"); // swap in / out
+		lock_acquire(&swap_lock);
+		vm_evict_frame();
+		frame->kva = palloc_get_page(PAL_USER);
 	}
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
+	list_push_back(&frame_list, &frame->f_elem);
 	return frame;
 }
 
@@ -311,7 +327,8 @@ vm_do_claim_page (struct page *page) {
 		// vm_free_frame(frame);
 		return false;
 	}
-	
+	if (lock_held_by_current_thread (&swap_lock)) 
+		lock_release(&swap_lock);
 	return swap_in (page, frame->kva);
 }
 

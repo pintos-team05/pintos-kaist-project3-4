@@ -400,12 +400,22 @@ int read(int fd, void *buffer, unsigned size) {
 	// if fd is 0, it reads from keyboard using input_getc(), 
 	// otherwise reads from file using file_read() function
 
-	// struct thread *t = thread_current();
+	struct thread *t = thread_current();
+	struct supplemental_page_table *spt = &t->spt;
+	struct page *p = spt_find_page(spt, buffer);
+
+	
+	// printf("current_page_writable : %d ---------\n", p->writable);	
+
 	// uint64_t *pml4 = thread_current()->pml4;
-	// uint64_t *pte = pml4e_walk (pml4, (uint64_t) buffer, 0);
+	// uint64_t *pte = pml4e_walk (pml4, pg_round_up((uint64_t) buffer), 0);
 	// bool writable = is_writable(pte);
-	// if (!writable)
-	// 	exit(-1);
+
+	// printf("pml4_writable : %d------------\n", writable);
+	if (p != NULL){
+		if ((p->writable == 0))
+			exit(-1);
+	}
 
 	validate_address(buffer);
 	

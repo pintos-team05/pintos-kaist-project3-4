@@ -12,7 +12,8 @@
 #include "vm/vm.h"
 #endif
 
-
+/* Lock used by swap_out() */
+static struct lock swap_lock;
 /* States in a thread's life cycle. */
 enum thread_status {
 	THREAD_RUNNING,     /* Running thread. */

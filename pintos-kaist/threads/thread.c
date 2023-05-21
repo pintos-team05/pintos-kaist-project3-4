@@ -48,6 +48,7 @@ static struct thread *initial_thread;
 /* Lock used by allocate_tid(). */
 static struct lock tid_lock;
 
+
 /* Thread destruction requests */
 static struct list destruction_req;
 
@@ -117,6 +118,7 @@ thread_init (void) {
 	lgdt (&gdt_ds);
 
 	/* Init the globla thread context */
+	lock_init (&swap_lock);
 	lock_init (&tid_lock);
 	list_init (&ready_list);
 	list_init (&sleep_list);

@@ -3,7 +3,7 @@
 #include <stdbool.h>
 #include "threads/palloc.h"
 #include <hash.h>
-
+struct list frame_list;
 enum vm_type {
 	/* page not initialized */
 	VM_UNINIT = 0,
@@ -49,7 +49,9 @@ struct page {
 	/* Your implementation */
 	struct hash_elem hash_elem;
 	struct file* mmaped_file;
+	bool writable;
 
+	size_t start_slot_num;
 	off_t mmaped_offset;
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
@@ -67,6 +69,7 @@ struct page {
 struct frame {
 	void *kva;
 	struct page *page;
+	struct list_elem f_elem;
 };
 
 /* The function table for page operations.

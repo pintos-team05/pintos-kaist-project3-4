@@ -35,12 +35,56 @@ file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
 static bool
 file_backed_swap_in (struct page *page, void *kva) {
 	struct file_page *file_page UNUSED = &page->file;
+	if (page == NULL)
+		return false;
+
+	uint64_t *pml4 = thread_current()->pml4;
+
+	off_t mmaped_offset = page->mmaped_offset;
+	struct supplemental_page_table *spt = &thread_current()->spt;
+	
+	file_read_at(page->mmaped_file, kva, PGSIZE, page->mmaped_offset);
+	pml4_set_page(pml4, page->va, kva, page->writable);
+	
+	return true;
+	/* Swap in by reading the content from the file. */
+	/* Synchronize with file system. */
+	
 }
 
 /* Swap out the page by writeback contents to the file. */
 static bool
 file_backed_swap_out (struct page *page) {
 	struct file_page *file_page UNUSED = &page->file;
+	if (page == NULL)
+		return false;
+
+	off_t mmaped_offset = page->mmaped_offset;
+	struct supplemental_page_table *spt = &thread_current()->spt;
+	uint64_t *pml4 = thread_current()->pml4;
+	struct file *mmaped_file = page->mmaped_file;
+
+	if(pml4_is_dirty(pml4, page->va)){
+		file_write_at(page->mmaped_file, page->frame->kva, PGSIZE, page->mmaped_offset);
+	    pml4_set_dirty(pml4, page->va, 0);
+	}
+
+	pml4_clear_page(pml4, page->va);
+	palloc_free_page(page->frame->kva);
+	free(page->frame);
+	page->frame = NULL;
+
+	return true;
+
+	// hash_delete(&spt->pages, &page->hash_elem);
+	// page->va = NULL;
+	// file_close(mmaped_file);
+
+
+	/* If evict the file-backed page, that page would be written into mapped file.*/
+	/* If page is dirty, it would be written in to the file. */
+	/* After swap out, dirty bit off. */
+	/* If not, It doesn't need to update it, */
 }
 
 /* Destory the file backed page. PAGE will be freed by the caller. */
@@ -58,18 +102,12 @@ file_backed_destroy (struct page *page) {
 
 	struct file *mmaped_file = page->mmaped_file;
 
-	// int length = (PGSIZE > file_length(mmaped_file)) ? file_length(mmaped_file): PGSIZE;
+	
 
 	if(pml4_is_dirty(pml4, page->va)){
 		file_write_at(page->mmaped_file, page->frame->kva, PGSIZE, page->mmaped_offset);
 	    pml4_set_dirty(pml4, page->va, 0);
 	}
-
-	// char *buffer = malloc(513);
-	// file_read(page->mmaped_file, buffer, 512);
-	// buffer[512] = '\0';
-	// printf("file read -> buffer : \n%s\n", buffer);
-	// free(buffer);
 
 	hash_delete(&spt->pages, &page->hash_elem);
 	page->va = NULL;
