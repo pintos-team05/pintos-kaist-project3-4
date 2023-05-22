@@ -5,6 +5,7 @@
 
 // project 3 add header
 #include "../include/lib/kernel/hash.h"
+#include "../include/lib/kernel/list.h"
 // project 3 add header
 
 enum vm_type {
@@ -53,6 +54,7 @@ struct page {
 	struct hash_elem hash_elem;
 	bool writable;
 	off_t offset;
+	size_t start_swap_no;
 	//project 3 add struct_elem
 	
 	/* Your implementation */
@@ -74,6 +76,9 @@ struct page {
 struct frame {
 	void *kva;
 	struct page *page;
+	// add member
+	struct list_elem f_elem;
+	// add member
 };
 
 /* The function table for page operations.
@@ -123,5 +128,8 @@ enum vm_type page_get_type (struct page *page);
 //project 3 add function_prototype
 bool page_less (const struct hash_elem *a_, const struct hash_elem *b_, void *aux UNUSED);
 unsigned page_hash (const struct hash_elem *p_, void *aux UNUSED);
+struct lock swap_lock;
+struct list frame_table;
+struct bitmap *swap_table;
 //project 3 add function_prototype
 #endif  /* VM_VM_H */

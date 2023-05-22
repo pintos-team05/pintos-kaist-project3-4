@@ -5,6 +5,7 @@
 #include "../include/userprog/process.h"
 #include "../include/threads/mmu.h"
 #include "../include/userprog/syscall.h"
+#include "../include/lib/kernel/bitmap.h"
 //project 3 add header
 
 static bool file_backed_swap_in (struct page *page, void *kva);
@@ -37,12 +38,32 @@ file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
 static bool
 file_backed_swap_in (struct page *page, void *kva) {
 	struct file_page *file_page UNUSED = &page->file;
+	// lock 홀더 확인하기.
+	// if (!lock_held_by_current_thread(&swap_lock)) {
+	// 	return false;
+	// }
+	// lock_release(&swap_lock);
+	
+	// 함수인자를 page->offset 으로 줬었음... - swap-iter.c
+	file_read(page->file.file, kva, PGSIZE);
+	uint64_t *pml4 = thread_current()->pml4;
+	pml4_set_page(pml4, page->va, page->frame->kva, page->writable);
 }
 
 /* Swap out the page by writeback contents to the file. */
 static bool
 file_backed_swap_out (struct page *page) {
 	struct file_page *file_page UNUSED = &page->file;
+	file_seek(page->file.file, page->offset);
+	if (pml4_is_dirty(thread_current()->pml4, page->va)) {
+		file_write(page->file.file, page->frame->kva, PGSIZE);
+		pml4_set_dirty(thread_current()->pml4, page->va,0);
+	}
+	pml4_clear_page(thread_current()->pml4, page->va);
+	palloc_free_page(page->frame->kva);
+	free(page->frame);
+	page->frame = NULL;
+	return true;
 }
 
 /* Destory the file backed page. PAGE will be freed by the caller. */
@@ -58,6 +79,7 @@ file_backed_destroy (struct page *page) {
 		pml4_set_dirty(thread_current()->pml4, page->va,0);
 	}
 	pml4_clear_page(thread_current()->pml4, page->va);
+	// file_close(page->file.file);
 }
 bool
 lazy_load_segment_file (struct page *page, void *aux) {

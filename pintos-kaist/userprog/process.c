@@ -33,20 +33,20 @@ void push_args(char **argv, int argc, struct intr_frame *if_);
 struct thread* get_child_process(child_tid);
 void clear_children();
 // project 3 add function non header
-static struct frame *
-vm_get_frame (void) {
-	struct frame *frame = palloc_get_page(PAL_USER);
-	/* TODO: Fill this function. */
-	frame->kva = palloc_get_page(PAL_USER);
-	frame->page = NULL;
-	if (frame == NULL) {
-		PANIC("todo");
-	}
+// static struct frame *
+// vm_get_frame (void) {
+// 	struct frame *frame = palloc_get_page(PAL_USER);
+// 	/* TODO: Fill this function. */
+// 	frame->kva = palloc_get_page(PAL_USER);
+// 	frame->page = NULL;
+// 	if (frame == NULL) {
+// 		PANIC("todo");
+// 	}
 	
-	ASSERT (frame != NULL);
-	ASSERT (frame->page == NULL);
-	return frame;
-}
+// 	ASSERT (frame != NULL);
+// 	ASSERT (frame->page == NULL);
+// 	return frame;
+// }
 // project 3 add function non header
 
 /* General process initializer for initd and other process. */

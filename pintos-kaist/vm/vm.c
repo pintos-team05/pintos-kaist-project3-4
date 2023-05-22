@@ -10,6 +10,7 @@
 #include "../include/vm/uninit.h"
 #include "../include/vm/anon.h"
 #include "../include/lib/string.h"
+#include "../include/lib/kernel/bitmap.h"
 // project 3 add header
 
 //project 3 add function_prototype
@@ -30,6 +31,8 @@ vm_init (void) {
 	register_inspect_intr ();
 	/* DO NOT MODIFY UPPER LINES. */
 	/* TODO: Your code goes here. */
+	list_init(&frame_table);
+	lock_init(&swap_lock);
 }
 
 /* Get the type of the page. This function is useful if you want to know the
@@ -64,7 +67,7 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 
 	/* Check whether the upage is already occupied or not. */
 	if (spt_find_page (spt, pg_round_down(upage)) == NULL) {
-		struct page * new_page = calloc(1, sizeof(struct page));
+		struct page * new_page = (struct page *)calloc(1, sizeof(struct page));
 		/* TODO: Create the page, fetch the initialier according to the VM type,
 		 * TODO: and then create "uninit" page struct by calling uninit_new. You
 		 * TODO: should modify the field after calling the uninit_new. */
@@ -130,9 +133,9 @@ spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
 /* Get the struct frame, that will be evicted. */
 static struct frame *
 vm_get_victim (void) {
-	struct frame *victim = NULL;
+	// implement using FIFO algorithm
+	struct frame *victim = list_entry(list_pop_front(&frame_table), struct frame, f_elem);
 	 /* TODO: The policy for eviction is up to you. */
-
 	return victim;
 }
 
@@ -141,8 +144,12 @@ vm_get_victim (void) {
 static struct frame *
 vm_evict_frame (void) {
 	struct frame *victim UNUSED = vm_get_victim ();
+	struct page *victim_page = victim->page;
+	swap_out(victim_page);
+	if (victim != NULL) {
+		return victim;
+	}
 	/* TODO: swap out the victim and return the evicted frame. */
-
 	return NULL;
 }
 
@@ -153,16 +160,27 @@ vm_evict_frame (void) {
 static struct frame *
 vm_get_frame (void) {
 	// page-linear 는 calloc 으로바꾸면 됨. palloc 안됨.
-	struct frame *frame = calloc(1, sizeof(struct frame));
+	struct frame *frame = (struct frame *)calloc(1, sizeof(struct frame));
 	/* TODO: Fill this function. */
 	frame->kva = palloc_get_page(PAL_USER);
 	frame->page = NULL;
-	if (frame == NULL) {
-		PANIC("todo");
+	if (frame->kva == NULL) {
+		// lock_acquire(&swap_lock);
+		vm_evict_frame();
+		frame->kva = palloc_get_page(PAL_USER);
+		if (frame->kva == NULL){
+			printf("success swap out\n");
+		}
 	}
-	
+	// else {
+		// if (!lock_held_by_current_thread(&swap_lock)) {
+		// 	return false;
+		// }
+		// lock_release(&swap_lock);
+	// }
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
+	list_push_back(&frame_table, &frame->f_elem);
 	return frame;
 }
 

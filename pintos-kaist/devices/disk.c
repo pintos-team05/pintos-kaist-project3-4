@@ -237,7 +237,6 @@ disk_write (struct disk *d, disk_sector_t sec_no, const void *buffer) {
 
 	ASSERT (d != NULL);
 	ASSERT (buffer != NULL);
-
 	c = d->channel;
 	lock_acquire (&c->lock);
 	select_sector (d, sec_no);

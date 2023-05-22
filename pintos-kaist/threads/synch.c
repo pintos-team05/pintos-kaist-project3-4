@@ -116,7 +116,10 @@ sema_up (struct semaphore *sema) {
 	if (!list_empty (&sema->waiters)){
 		t = list_entry (list_pop_front (&sema->waiters), struct thread, elem);
 		thread_unblock(t);	
-		thread_yield();
+		// idle_thread 일때에도 yield 가 들어갔었음 !
+		if (thread_current() != idle_thread) {
+			thread_yield();
+		}
 	}
 	// printf("is empty : %d\n" , list_empty (&sema->waiters));
 	intr_set_level (old_level);
