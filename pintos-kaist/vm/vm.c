@@ -7,6 +7,7 @@
 #include <string.h>
 #include "userprog/process.h"
 #include "threads/mmu.h"
+#include "threads/thread.h"
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -20,6 +21,8 @@ vm_init (void) {
 	register_inspect_intr ();
 	/* DO NOT MODIFY UPPER LINES. */
 	/* TODO: Your code goes here. */
+	list_init(&frame_list);
+	lock_init(&swap_lock);
 }
 
 /* Get the type of the page. This function is useful if you want to know the
@@ -76,6 +79,7 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 			break;
 		}
 		/* TODO: Insert the page into the spt. */
+		page_new->writable = writable;
 		return spt_insert_page (spt, page_new);
 	}
 	return false;
@@ -123,7 +127,9 @@ static struct frame *
 vm_get_victim (void) {
 	struct frame *victim = NULL;
 	 /* TODO: The policy for eviction is up to you. */
-
+	if (!list_empty(&frame_list))
+		victim = list_entry(list_begin(&frame_list), struct frame, frame_elem);
+	
 	return victim;
 }
 
@@ -133,7 +139,8 @@ static struct frame *
 vm_evict_frame (void) {
 	struct frame *victim UNUSED = vm_get_victim ();
 	/* TODO: swap out the victim and return the evicted frame. */
-
+	list_remove(&victim->frame_elem);
+	swap_out(victim->page);
 	return NULL;
 }
 
@@ -151,8 +158,12 @@ vm_get_frame (void) {
 	/* TODO: swap_out */
 	if (frame->kva == NULL)
 	{
-		PANIC("Todo: swapping");
+		lock_acquire(&swap_lock);
+		/* Select the victim frame(page) */
+		vm_evict_frame();
+		frame->kva = palloc_get_page(PAL_USER);
 	}
+	list_push_back(&frame_list, &frame->frame_elem);
 	
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
@@ -251,8 +262,7 @@ vm_claim_page (void *va UNUSED) {
 static bool
 vm_do_claim_page (struct page *page) {
 	struct frame *frame = vm_get_frame ();
-	/* Is address validation need? */
-
+	
 	/* Set links */
 	frame->page = page;
 	page->frame = frame;

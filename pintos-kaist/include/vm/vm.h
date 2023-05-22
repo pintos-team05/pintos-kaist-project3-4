@@ -2,6 +2,12 @@
 #define VM_VM_H
 #include <stdbool.h>
 #include "threads/palloc.h"
+#include "lib/kernel/list.h"
+
+/* Project3 */
+struct list frame_list;
+struct bitmap *swap_table;
+struct lock swap_lock;
 
 enum vm_type {
 	/* page not initialized */
@@ -50,6 +56,8 @@ struct page {
 	struct hash_elem hash_elem;
 	struct file *map_file;
 	int offset;
+	bool writable;
+	int start_sector_num;
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
 	union {
@@ -66,6 +74,7 @@ struct page {
 struct frame {
 	void *kva;
 	struct page *page;
+	struct list_elem frame_elem;
 };
 
 /* The function table for page operations.

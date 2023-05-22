@@ -380,16 +380,22 @@ int read(int fd, void *buffer, unsigned size) {
 		return -1;
 
 	validate_address(buffer);
+	struct thread *curr = thread_current();
+	struct supplemental_page_table *spt = &curr->spt;
+	struct page *p = spt_find_page(spt, buffer);
 
-	// if (fd >= 2)
+	if (p != NULL)
+	{
+		if (p->writable==0)
+			return -1;
+	}
+	
+
+	// uint64_t *pte = pml4e_walk (curr->pml4, pg_round_down(buffer), 0);
+	// if (pte != NULL && p != NULL)
 	// {
-	// 	struct thread *curr = thread_current();
-	// 	uint64_t *pte = pml4e_walk (curr->pml4, pg_round_down(buffer), 0);
-	// 	if (pte != NULL)
-	// 	{
-	// 		if (!is_writable(pte))
-	// 			return -1;
-	// 	}
+	// 	if ((is_writable(pte))==0 && p->writable==0)
+	// 		return -1;
 	// }
 
 	lock_acquire(&filesys_lock);

@@ -40,7 +40,7 @@ bool more_priority(const struct list_elem *a, const struct list_elem *b, void *a
 bool less_ticks(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 
 /* Idle thread. */
-static struct thread *idle_thread;
+// static struct thread *idle_thread;
 
 /* Initial thread, the thread running init.c:main(). */
 static struct thread *initial_thread;

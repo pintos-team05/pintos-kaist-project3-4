@@ -33,12 +33,58 @@ file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
 static bool
 file_backed_swap_in (struct page *page, void *kva) {
 	struct file_page *file_page UNUSED = &page->file;
+	
+	struct page *p = page;
+
+	if (p == NULL)
+		return false;
+	
+	struct file *file = p->map_file;
+	if (file == NULL)
+		return false;
+
+	file_seek(file, p->offset);
+	file_read(file, kva, PGSIZE);
+	
+	pml4_set_page(thread_current()->pml4, page->va, kva, page->writable);
+
+	if(lock_held_by_current_thread(&swap_lock))
+		lock_release(&swap_lock);
+	return true;
 }
 
 /* Swap out the page by writeback contents to the file. */
 static bool
 file_backed_swap_out (struct page *page) {
 	struct file_page *file_page UNUSED = &page->file;
+
+	struct supplemental_page_table *spt = &thread_current ()->spt;
+	struct page *p = page;
+
+	if (p == NULL)
+		return false;
+	
+	struct file *file = p->map_file;
+	if (file == NULL)
+	{
+		pml4_clear_page(thread_current()->pml4, p->va);
+		palloc_free_page(p->frame->kva);
+		free(p->frame);
+		return true;
+	}
+
+	if(pml4_is_dirty (thread_current()->pml4, p->va))
+	{
+		file_seek(file, p->offset);
+		file_write(file, p->frame->kva, PGSIZE);
+		pml4_set_dirty(thread_current()->pml4, p->va, false);
+	}
+
+	pml4_clear_page(thread_current()->pml4, p->va);
+	palloc_free_page(p->frame->kva);
+	free(p->frame);
+	p->frame = NULL;
+	return true;
 }
 
 /* Destory the file backed page. PAGE will be freed by the caller. */
@@ -176,14 +222,15 @@ void
 do_munmap (void *addr) {
 	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
 	struct page *p = spt_find_page(spt, addr);
-
 	if (p == NULL)
 		return;
 	
 	struct file *file = p->map_file;
 	struct inode *inode = file_get_inode(file);
+	int iidx=0;
 	while (1)	
 	{
+		// printf("idx = %d  \n", iidx++);
 		file = p->map_file;
 		if (file == NULL)
 			return;
@@ -197,15 +244,15 @@ do_munmap (void *addr) {
 			file_write(file, p->frame->kva, PGSIZE);
 			pml4_set_dirty(thread_current()->pml4, p->va, false);
 		}
-		p->va = NULL;
-		p->map_file = NULL;
 		hash_delete(&spt->pages, &p->hash_elem);
 		pml4_clear_page(thread_current()->pml4, p->va);
+		p->va = NULL;
+		p->map_file = NULL;
 		free(file);
-		// free(p);
 		addr += PGSIZE;
 		p = spt_find_page(spt, addr);
-		if (p==NULL)
+		if (p == NULL)
 			return;
 	}
+	// printf("reached at end of do_mumap\n");
 }

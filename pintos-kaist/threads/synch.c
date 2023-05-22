@@ -115,8 +115,11 @@ sema_up (struct semaphore *sema) {
 	sema->value++;
 	if (!list_empty (&sema->waiters)){
 		t = list_entry (list_pop_front (&sema->waiters), struct thread, elem);
-		thread_unblock(t);	
-		thread_yield();
+		thread_unblock(t);
+		if (thread_current()!= idle_thread)
+		{
+			thread_yield();
+		}
 	}
 	// printf("is empty : %d\n" , list_empty (&sema->waiters));
 	intr_set_level (old_level);

@@ -12,7 +12,7 @@
 #include "vm/vm.h"
 #endif
 
-
+struct thread *idle_thread;
 /* States in a thread's life cycle. */
 enum thread_status {
 	THREAD_RUNNING,     /* Running thread. */
