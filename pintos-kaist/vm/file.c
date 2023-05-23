@@ -43,8 +43,14 @@ file_backed_swap_in (struct page *page, void *kva) {
 	off_t mmaped_offset = page->mmaped_offset;
 	struct supplemental_page_table *spt = &thread_current()->spt;
 	
+	// lock_acquire(&thread_current()->disk_lock);
 	file_read_at(page->mmaped_file, kva, PGSIZE, page->mmaped_offset);
+	// lock_release(&thread_current()->disk_lock);
 	pml4_set_page(pml4, page->va, kva, page->writable);
+	
+
+	// if (lock_held_by_current_thread (&swap_lock)) 
+	// lock_release(&thread_current()->swap_lock);
 	
 	return true;
 	/* Swap in by reading the content from the file. */
@@ -64,10 +70,12 @@ file_backed_swap_out (struct page *page) {
 	uint64_t *pml4 = thread_current()->pml4;
 	struct file *mmaped_file = page->mmaped_file;
 
+	// lock_acquire(&disk_lock);
 	if(pml4_is_dirty(pml4, page->va)){
 		file_write_at(page->mmaped_file, page->frame->kva, PGSIZE, page->mmaped_offset);
 	    pml4_set_dirty(pml4, page->va, 0);
 	}
+	// lock_release(&disk_lock);
 
 	pml4_clear_page(pml4, page->va);
 	palloc_free_page(page->frame->kva);
@@ -75,11 +83,6 @@ file_backed_swap_out (struct page *page) {
 	page->frame = NULL;
 
 	return true;
-
-	// hash_delete(&spt->pages, &page->hash_elem);
-	// page->va = NULL;
-	// file_close(mmaped_file);
-
 
 	/* If evict the file-backed page, that page would be written into mapped file.*/
 	/* If page is dirty, it would be written in to the file. */

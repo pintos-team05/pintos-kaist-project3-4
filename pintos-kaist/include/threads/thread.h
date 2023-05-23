@@ -13,7 +13,8 @@
 #endif
 
 /* Lock used by swap_out() */
-static struct lock swap_lock;
+// struct lock swap_lock;
+struct thread *idle_thread;
 /* States in a thread's life cycle. */
 enum thread_status {
 	THREAD_RUNNING,     /* Running thread. */
@@ -21,7 +22,7 @@ enum thread_status {
 	THREAD_BLOCKED,     /* Waiting for an event to trigger. */
 	THREAD_DYING        /* About to be destroyed. */
 };
-
+// extern struct thread *idle_thread;
 /* Thread identifier type.
    You can redefine this to whatever type you like. */
 typedef int tid_t;
@@ -100,11 +101,10 @@ struct thread {
 	int priority;                       /* Priority. */
 
 	int original_priority;				/* Use to memorize priority before donation */
-
+	
 	struct lock *wait_on_lock;
 	struct list donations;				/* donators */
 	struct list_elem d_elem; 			/* donation list element */
-
 
 	int64_t wakeup_ticks;   /* wakeup ticks */
 	/* Shared between thread.c and synch.c. */
@@ -124,7 +124,7 @@ struct thread {
 	struct semaphore fork_sema;
 	struct semaphore exit_sema;
 	struct semaphore free_sema;
-
+	
 	struct file* running_file;
 	
 	struct list children;

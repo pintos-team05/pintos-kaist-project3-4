@@ -115,10 +115,13 @@ sema_up (struct semaphore *sema) {
 	sema->value++;
 	if (!list_empty (&sema->waiters)){
 		t = list_entry (list_pop_front (&sema->waiters), struct thread, elem);
-		thread_unblock(t);	
-		thread_yield();
+		thread_unblock(t);
+				// preempt 판별
+		struct thread *curr = thread_current();
+		// && curr->priority < t->priority
+		if (curr != idle_thread )	
+			thread_yield();
 	}
-	// printf("is empty : %d\n" , list_empty (&sema->waiters));
 	intr_set_level (old_level);
 }
 
@@ -195,7 +198,6 @@ lock_acquire (struct lock *lock) {
 	ASSERT (!lock_held_by_current_thread (lock));
 	
 	struct thread *curr = thread_current();
-	// printf("current_running_thread : %d\n", curr->priority);
 	if (lock->holder){ // lock holder보다 current의 우선순위가 높으면, donate
 		if (lock->holder->priority < curr->priority){
 			curr->wait_on_lock = lock;

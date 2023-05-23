@@ -40,14 +40,15 @@ bool more_priority(const struct list_elem *a, const struct list_elem *b, void *a
 bool less_ticks(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 
 /* Idle thread. */
-static struct thread *idle_thread;
+struct thread *idle_thread;
 
 /* Initial thread, the thread running init.c:main(). */
 static struct thread *initial_thread;
 
 /* Lock used by allocate_tid(). */
 static struct lock tid_lock;
-
+// struct lock disk_lock;
+// struct lock swap_lock;
 
 /* Thread destruction requests */
 static struct list destruction_req;
@@ -118,7 +119,6 @@ thread_init (void) {
 	lgdt (&gdt_ds);
 
 	/* Init the globla thread context */
-	lock_init (&swap_lock);
 	lock_init (&tid_lock);
 	list_init (&ready_list);
 	list_init (&sleep_list);
@@ -432,8 +432,7 @@ void
 thread_yield (void) {
 	struct thread *curr = thread_current ();
 	enum intr_level old_level;
-
-	ASSERT (!intr_context ());
+	ASSERT (!intr_context ()); 
 
 	old_level = intr_disable ();
 	if (curr != idle_thread)
@@ -557,7 +556,7 @@ init_thread (struct thread *t, const char *name, int priority) {
 	sema_init (&t->fork_sema, 0);
 	sema_init (&t->free_sema, 0);
 	sema_init (&t->exit_sema, 0);
-
+	
 	t->exit_status = 0;
 	t->running_file = NULL;
 	t->wait_on_lock = NULL;

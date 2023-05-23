@@ -38,6 +38,9 @@ vm_init (void) {
 	register_inspect_intr ();
 	/* DO NOT MODIFY UPPER LINES. */
 	/* TODO: Your code goes here. */
+	// lock_init (&swap_lock);
+	// lock_init (&disk_lock);
+	list_init (&frame_list);
 }
 
 /* Get the type of the page. This function is useful if you want to know the
@@ -181,21 +184,27 @@ vm_evict_frame (void) {
  * space.*/
 static struct frame *
 vm_get_frame (void) {
+
+	// lock_acquire(&thread_current()->swap_lock);
+
 	struct frame *frame = calloc(1, sizeof(struct frame));
 	// struct frame *frame = palloc_get_page(PAL_USER);
 	/* TODO: Fill this function. */
+	
 	frame->kva = palloc_get_page(PAL_USER);
 	frame->page = NULL;
-
+	
 	
 	if (frame->kva == NULL){
-		lock_acquire(&swap_lock);
 		vm_evict_frame();
 		frame->kva = palloc_get_page(PAL_USER);
+
 	}
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
 	list_push_back(&frame_list, &frame->f_elem);
+	
+	// lock_release(&swap_lock);
 	return frame;
 }
 
@@ -208,14 +217,14 @@ vm_stack_growth (void *addr UNUSED) {
 	// 늘려야 할 만큼 늘려 준다 -> 일단 한 페이지만 늘려볼까? 한 페이지만 늘려주면 됨
 
 	// void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
-	void *stack_bottom = pg_round_down(addr);
+	void *stack_bottom = (void *)((uint8_t *)pg_round_down(addr));
 
-	if (vm_alloc_page(VM_ANON, stack_bottom, true)) {
-		struct page *page = spt_find_page(spt, stack_bottom);
-		if (page != NULL) {
-			vm_claim_page(stack_bottom);
-		}
+	vm_alloc_page(VM_ANON, stack_bottom, true); 
+	struct page *page = spt_find_page(spt, stack_bottom);
+	if (page != NULL) {
+		vm_claim_page(stack_bottom);
 	}
+	
 	/* 1. validate addr */
 }
 
@@ -327,8 +336,6 @@ vm_do_claim_page (struct page *page) {
 		// vm_free_frame(frame);
 		return false;
 	}
-	if (lock_held_by_current_thread (&swap_lock)) 
-		lock_release(&swap_lock);
 	return swap_in (page, frame->kva);
 }
 
