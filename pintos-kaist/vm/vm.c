@@ -332,10 +332,10 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 			if(!vm_do_claim_page(page_child))
 				return false;
 			
-			// frame_child = page_child->frame;
-			// memcpy(frame_child->kva, page_parent->frame->kva, PGSIZE);
+			frame_child = page_child->frame;
+			memcpy(frame_child->kva, page_parent->frame->kva, PGSIZE);
 			// free(page_child->frame->kva);
-			page_child->frame->kva = page_parent->frame->kva;
+			// page_child->frame->kva = page_parent->frame->kva;
 			pml4_set_page(dst, page_child->va, page_parent->frame->kva, true);
 			page_child->map_file = file_duplicate(page_parent->map_file);
 			break;

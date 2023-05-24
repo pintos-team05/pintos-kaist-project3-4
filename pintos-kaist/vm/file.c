@@ -227,7 +227,6 @@ do_munmap (void *addr) {
 	
 	struct file *file = p->map_file;
 	struct inode *inode = file_get_inode(file);
-	int iidx=0;
 	while (1)	
 	{
 		// printf("idx = %d  \n", iidx++);
