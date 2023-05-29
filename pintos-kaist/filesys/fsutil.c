@@ -112,12 +112,14 @@ fsutil_put (char **argv) {
 		PANIC ("%s: open failed", file_name);
 
 	/* Do copy. */
+	int idx = 0;
 	while (size > 0) {
 		int chunk_size = size > DISK_SECTOR_SIZE ? DISK_SECTOR_SIZE : size;
 		disk_read (src, sector++, buffer);
 		if (file_write (dst, buffer, chunk_size) != chunk_size)
 			PANIC ("%s: write failed with %"PROTd" bytes unwritten",
 					file_name, size);
+		// printf("While Putting operation... size = %d, chunk size = %d, index = %d\n", size, chunk_size,idx++);
 		size -= chunk_size;
 	}
 

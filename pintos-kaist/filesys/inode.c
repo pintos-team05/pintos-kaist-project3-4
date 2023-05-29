@@ -6,6 +6,7 @@
 #include "filesys/filesys.h"
 #include "filesys/free-map.h"
 #include "threads/malloc.h"
+#include "filesys/fat.h"
 
 /* Identifies an inode. */
 #define INODE_MAGIC 0x494e4f44
@@ -77,20 +78,29 @@ inode_create (disk_sector_t sector, off_t length) {
 
 	disk_inode = calloc (1, sizeof *disk_inode);
 	if (disk_inode != NULL) {
+		static char zeros[DISK_SECTOR_SIZE];
+
 		size_t sectors = bytes_to_sectors (length);
 		disk_inode->length = length;
 		disk_inode->magic = INODE_MAGIC;
-		if (free_map_allocate (sectors, &disk_inode->start)) {
-			disk_write (filesys_disk, sector, disk_inode);
-			if (sectors > 0) {
-				static char zeros[DISK_SECTOR_SIZE];
-				size_t i;
-
-				for (i = 0; i < sectors; i++) 
-					disk_write (filesys_disk, disk_inode->start + i, zeros); 
+		if (fat_get(sector_to_cluster(sector)) == 0)
+			fat_put(sector_to_cluster(sector), EOChain);
+		
+		cluster_t clst;
+		for (size_t i = 0; i < sectors; i++)
+		{
+			if (i == 0)
+			{	
+				clst = fat_create_chain(0);
+				disk_inode->start = cluster_to_sector(clst);
 			}
-			success = true; 
-		} 
+			else
+				clst = fat_create_chain(clst);
+
+			disk_write (filesys_disk, cluster_to_sector(clst), zeros);
+		}
+		disk_write(filesys_disk, sector, disk_inode);
+		success = true;
 		free (disk_inode);
 	}
 	return success;
@@ -159,9 +169,10 @@ inode_close (struct inode *inode) {
 
 		/* Deallocate blocks if removed. */
 		if (inode->removed) {
-			free_map_release (inode->sector, 1);
-			free_map_release (inode->data.start,
-					bytes_to_sectors (inode->data.length)); 
+			fat_remove_chain(sector_to_cluster(inode->sector), 0);
+			// free_map_release (inode->sector, 1);
+			// free_map_release (inode->data.start,
+			// 		bytes_to_sectors (inode->data.length));
 		}
 
 		free (inode); 
@@ -187,7 +198,26 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset) {
 
 	while (size > 0) {
 		/* Disk sector to read, starting byte offset within sector. */
-		disk_sector_t sector_idx = byte_to_sector (inode, offset);
+		disk_sector_t sector_idx;
+		cluster_t clst;
+		// int order_in_cahin = byte_to_sector (inode, offset);
+		int order_in_chain = (int)(offset / DISK_SECTOR_SIZE);
+		// if (order_in_chain == 0) /* meta data(inode_disk) */
+		// {
+		// 	sector_idx = inode->sector;
+		// }
+		// else
+		// {
+		// 	clst  = sector_to_cluster(inode->data.start);
+		// 	cluster_t temp = find_cluster_in_chain(clst, order_in_chain);
+		// 	sector_idx = cluster_to_sector(temp);
+		// }
+		/* Meaning that the order of chain is 0 is not meta data, 
+		but start sector of data */
+		clst  = sector_to_cluster(inode->data.start);
+		cluster_t temp = find_cluster_in_chain(clst, order_in_chain);
+		sector_idx = cluster_to_sector(temp);
+
 		int sector_ofs = offset % DISK_SECTOR_SIZE;
 
 		/* Bytes left in inode, bytes left in sector, lesser of the two. */
@@ -242,7 +272,27 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
 
 	while (size > 0) {
 		/* Sector to write, starting byte offset within sector. */
-		disk_sector_t sector_idx = byte_to_sector (inode, offset);
+		// disk_sector_t sector_idx = byte_to_sector (inode, offset);		
+		disk_sector_t sector_idx;
+		cluster_t clst;
+		// int order_in_cahin = byte_to_sector (inode, offset);
+		int order_in_chain = (int)(offset / DISK_SECTOR_SIZE);
+		// if (order_in_chain == 0) /* meta data(inode_disk) */
+		// {
+		// 	sector_idx = inode->sector;
+		// }
+		// else
+		// {
+		// 	clst  = sector_to_cluster(inode->data.start);
+		// 	cluster_t temp = find_cluster_in_chain(clst, order_in_chain);
+		// 	sector_idx = cluster_to_sector(temp);
+		// }
+		/* Meaning that the order of chain is 0 is not meta data, 
+		but start sector of data */
+		clst  = sector_to_cluster(inode->data.start);
+		cluster_t temp = find_cluster_in_chain(clst, order_in_chain);
+		sector_idx = cluster_to_sector(temp);
+
 		int sector_ofs = offset % DISK_SECTOR_SIZE;
 
 		/* Bytes left in inode, bytes left in sector, lesser of the two. */
@@ -274,7 +324,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
 			else
 				memset (bounce, 0, DISK_SECTOR_SIZE);
 			memcpy (bounce + sector_ofs, buffer + bytes_written, chunk_size);
-			disk_write (filesys_disk, sector_idx, bounce); 
+			disk_write (filesys_disk, sector_idx, bounce);
 		}
 
 		/* Advance. */

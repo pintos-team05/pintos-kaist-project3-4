@@ -153,11 +153,25 @@ fat_boot_create (void) {
 void
 fat_fs_init (void) {
 	/* TODO: Your code goes here. */
+	fat_fs->fat_length = ((fat_fs->bs.fat_sectors)*DISK_SECTOR_SIZE)/(sizeof(cluster_t)*SECTORS_PER_CLUSTER);
+	fat_fs->data_start = fat_fs->bs.fat_start + fat_fs->bs.fat_sectors;
 }
 
 /*----------------------------------------------------------------------------*/
 /* FAT handling                                                               */
 /*----------------------------------------------------------------------------*/
+
+cluster_t
+fat_find_free_cluster(cluster_t exception_cluster)
+{
+	for (cluster_t i = 2; i < fat_fs->fat_length; i++)
+	{
+		cluster_t free = fat_get(i);
+		if (free == 0 && i != exception_cluster)
+			return i;
+	}
+	return -1;
+}
 
 /* Add a cluster to the chain.
  * If CLST is 0, start a new chain.
@@ -165,6 +179,24 @@ fat_fs_init (void) {
 cluster_t
 fat_create_chain (cluster_t clst) {
 	/* TODO: Your code goes here. */
+	cluster_t free_clst;
+	free_clst = fat_find_free_cluster(0);
+	if (free_clst < 0)
+		return 0;
+	
+	/* create new chain */
+	if (clst == 0)
+	{
+		fat_put(free_clst, EOChain);
+		return free_clst;
+	}
+
+	cluster_t i_eoc = clst;
+	for (i_eoc; fat_get(i_eoc)!= EOChain; i_eoc = fat_get(i_eoc)){}
+
+	fat_put(i_eoc, free_clst);
+	fat_put(free_clst, EOChain);
+	return free_clst;
 }
 
 /* Remove the chain of clusters starting from CLST.
@@ -172,22 +204,56 @@ fat_create_chain (cluster_t clst) {
 void
 fat_remove_chain (cluster_t clst, cluster_t pclst) {
 	/* TODO: Your code goes here. */
+	cluster_t curr_clst;
+	// if (pclst == 0)
+	// 	curr_clst = clst;
+	// else
+	// 	curr_clst = fat_get(pclst);
+	curr_clst = clst;
+
+	for (curr_clst; fat_get(curr_clst) != EOChain; )
+	{
+		cluster_t next = fat_get(curr_clst);
+		fat_put(curr_clst, 0);
+		curr_clst = next;
+	}
+	fat_put(curr_clst, 0);
+
+	if (pclst != 0)
+		fat_put(pclst, EOChain);
 }
 
 /* Update a value in the FAT table. */
 void
 fat_put (cluster_t clst, cluster_t val) {
 	/* TODO: Your code goes here. */
+	*(fat_fs->fat + clst) = val;
 }
 
 /* Fetch a value in the FAT table. */
 cluster_t
 fat_get (cluster_t clst) {
 	/* TODO: Your code goes here. */
+	return *(fat_fs->fat + clst);
 }
 
 /* Covert a cluster # to a sector number. */
 disk_sector_t
 cluster_to_sector (cluster_t clst) {
 	/* TODO: Your code goes here. */
+	return fat_fs->data_start + clst;
+}
+disk_sector_t
+sector_to_cluster (disk_sector_t sector) {
+	/* TODO: Your code goes here. */
+	return sector - fat_fs->data_start;
+}
+cluster_t
+find_cluster_in_chain(cluster_t start_of_chain, int order_in_chain)
+{
+	cluster_t curr = start_of_chain;
+	for (size_t i = 0; i < order_in_chain; i++)
+		curr = fat_get(curr);
+		
+	return curr;
 }
