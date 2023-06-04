@@ -16,8 +16,10 @@
 struct inode_disk {
 	disk_sector_t start;                /* First data sector. */
 	off_t length;                       /* File size in bytes. */
+	bool is_dir;						/* Is directory */
 	unsigned magic;                     /* Magic number. */
-	uint32_t unused[125];               /* Not used. */
+	uint32_t unused[124];               /* Not used. */
+	// bool unused[3];               /* Not used. */
 };
 
 /* Returns the number of sectors to allocate for an inode SIZE
@@ -66,7 +68,7 @@ inode_init (void) {
  * Returns true if successful.
  * Returns false if memory or disk allocation fails. */
 bool
-inode_create (disk_sector_t sector, off_t length) {
+inode_create (disk_sector_t sector, off_t length, bool is_dir) {
 	struct inode_disk *disk_inode = NULL;
 	bool success = false;
 
@@ -82,6 +84,7 @@ inode_create (disk_sector_t sector, off_t length) {
 
 		size_t sectors = bytes_to_sectors (length);
 		disk_inode->length = length;
+		disk_inode->is_dir = is_dir;
 		disk_inode->magic = INODE_MAGIC;
 		if (fat_get(sector_to_cluster(sector)) == 0)
 			fat_put(sector_to_cluster(sector), EOChain);
@@ -202,16 +205,7 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset) {
 		cluster_t clst;
 		// int order_in_cahin = byte_to_sector (inode, offset);
 		int order_in_chain = (int)(offset / DISK_SECTOR_SIZE);
-		// if (order_in_chain == 0) /* meta data(inode_disk) */
-		// {
-		// 	sector_idx = inode->sector;
-		// }
-		// else
-		// {
-		// 	clst  = sector_to_cluster(inode->data.start);
-		// 	cluster_t temp = find_cluster_in_chain(clst, order_in_chain);
-		// 	sector_idx = cluster_to_sector(temp);
-		// }
+
 		/* Meaning that the order of chain is 0 is not meta data, 
 		but start sector of data */
 		clst  = sector_to_cluster(inode->data.start);
@@ -277,20 +271,20 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
 		cluster_t clst;
 		// int order_in_cahin = byte_to_sector (inode, offset);
 		int order_in_chain = (int)(offset / DISK_SECTOR_SIZE);
-		// if (order_in_chain == 0) /* meta data(inode_disk) */
-		// {
-		// 	sector_idx = inode->sector;
-		// }
-		// else
-		// {
-		// 	clst  = sector_to_cluster(inode->data.start);
-		// 	cluster_t temp = find_cluster_in_chain(clst, order_in_chain);
-		// 	sector_idx = cluster_to_sector(temp);
-		// }
-		/* Meaning that the order of chain is 0 is not meta data, 
-		but start sector of data */
+		
+		/* Meaning that the order of chain is 0 is not a meta data, 
+		but just mean the start sector of data sector chain */
 		clst  = sector_to_cluster(inode->data.start);
 		cluster_t temp = find_cluster_in_chain(clst, order_in_chain);
+		/* file growth situation */
+		/* Is need to consider, if offset is in the inode length range 
+		but (offset + size) is over inode length range? */
+		if (temp == 0)
+		{
+			off_t extend_sec_count = offset - inode_length (inode);
+
+		}
+		
 		sector_idx = cluster_to_sector(temp);
 
 		int sector_ofs = offset % DISK_SECTOR_SIZE;
@@ -360,4 +354,8 @@ inode_allow_write (struct inode *inode) {
 off_t
 inode_length (const struct inode *inode) {
 	return inode->data.length;
+}
+disk_sector_t
+inode_get_data_start(const struct inode *inode){
+	return inode->data.start;
 }

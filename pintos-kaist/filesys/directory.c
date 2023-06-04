@@ -6,6 +6,7 @@
 #include "filesys/inode.h"
 #include "threads/malloc.h"
 #include "filesys/fat.h"
+#include "lib/round.h"
 
 /* A directory. */
 struct dir {
@@ -24,7 +25,7 @@ struct dir_entry {
  * given SECTOR.  Returns true if successful, false on failure. */
 bool
 dir_create (disk_sector_t sector, size_t entry_cnt) {
-	return inode_create (sector, entry_cnt * sizeof (struct dir_entry));
+	return inode_create (sector, entry_cnt * sizeof (struct dir_entry), true);
 }
 
 /* Opens and returns the directory for the given INODE, of which
@@ -148,10 +149,34 @@ dir_add (struct dir *dir, const char *name, disk_sector_t inode_sector) {
 	 * inode_read_at() will only return a short read at end of file.
 	 * Otherwise, we'd need to verify that we didn't get a short
 	 * read due to something intermittent such as low memory. */
-	for (ofs = 0; inode_read_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
-			ofs += sizeof e)
+	bool is_growth_situation = true;
+	for (ofs = 0; inode_read_at (dir->inode, &e, sizeof e, ofs) == sizeof e; ofs += sizeof e)
+	{
 		if (!e.in_use)
+		{
+			is_growth_situation = false;
 			break;
+		}
+	}
+	
+	/* directory data sector growth */
+	if (is_growth_situation)
+	{
+		struct inode *ind = dir_get_inode(dir);
+		disk_sector_t data_start = inode_get_data_start(ind);
+		cluster_t clst = fat_create_chain(sector_to_cluster(data_start));
+	
+		static char zeros[DISK_SECTOR_SIZE];
+		disk_write (filesys_disk, cluster_to_sector(clst), zeros);
+
+		/* research empty space */
+		for (ofs= DIV_ROUND_UP (ofs, DISK_SECTOR_SIZE); inode_read_at (dir->inode, &e, sizeof e, ofs) == sizeof e; ofs += sizeof e){
+			if (!e.in_use){
+				is_growth_situation = true;
+				break;
+			}
+		}
+	}
 
 	/* Write slot. */
 	e.in_use = true;

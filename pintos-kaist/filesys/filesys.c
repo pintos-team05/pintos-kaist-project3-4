@@ -66,7 +66,7 @@ filesys_create (const char *name, off_t initial_size) {
 	// disk_sector_t sector = dir->inode->sector;
 	bool success = (dir != NULL
 			&& (clst!=0 )
-			&& inode_create (cluster_to_sector(clst), initial_size)
+			&& inode_create (cluster_to_sector(clst), initial_size, false)
 			&& dir_add (dir, name, cluster_to_sector(clst)));
 	if (!success && inode_sector != 0)
 	{
@@ -121,7 +121,7 @@ do_format (void) {
 	fat_close ();
 #else
 	free_map_create ();
-	if (!dir_create (ROOT_DIR_SECTOR, 16))
+	if (!dir_create (ROOT_DIR_SECTOR, 25))
 		PANIC ("root directory creation failed");
 	free_map_close ();
 #endif

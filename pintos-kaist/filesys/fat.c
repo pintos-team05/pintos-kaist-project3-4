@@ -248,12 +248,17 @@ sector_to_cluster (disk_sector_t sector) {
 	/* TODO: Your code goes here. */
 	return sector - fat_fs->data_start;
 }
+/* return 0, if order_in_chain is at over the chain length */
 cluster_t
 find_cluster_in_chain(cluster_t start_of_chain, int order_in_chain)
 {
 	cluster_t curr = start_of_chain;
 	for (size_t i = 0; i < order_in_chain; i++)
+	{
 		curr = fat_get(curr);
+		if (curr == EOChain && i < order_in_chain)
+			return 0;
+	}
 		
 	return curr;
 }
